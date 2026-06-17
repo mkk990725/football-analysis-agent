@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Football analysis shield">
+  <defs>
+    <linearGradient id="g" x1="10" x2="54" y1="6" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#12634f"/>
+      <stop offset="1" stop-color="#174d73"/>
+    </linearGradient>
+  </defs>
+  <path fill="url(#g)" d="M32 4 55 13v17c0 15-9 25-23 30C18 55 9 45 9 30V13L32 4Z"/>
+  <path fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M19 20h26v24H19z"/>
+  <path fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" d="M32 20v24M19 32h26"/>
+  <circle cx="32" cy="32" r="6.5" fill="none" stroke="#fff" stroke-width="2.5"/>
+  <path fill="#f6d56f" d="M32 9.5 39 12l-7 2.5L25 12l7-2.5Z"/>
+</svg>

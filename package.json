@@ -1,0 +1,13 @@
+{
+  "name": "football-analysis-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Explainable pre-match football analysis dashboard with a polling data service.",
+  "scripts": {
+    "start": "node server.js",
+    "sync:once": "node server.js --once"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

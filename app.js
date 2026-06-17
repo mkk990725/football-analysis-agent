@@ -30,8 +30,11 @@ const riskText = {
   high: "高风险"
 };
 
+const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
+
 const teamNameZh = {
   Argentina: "阿根廷",
+  Algeria: "阿尔及利亚",
   Australia: "澳大利亚",
   Austria: "奥地利",
   Belgium: "比利时",
@@ -164,6 +167,25 @@ function formatIsoDate(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function addDays(isoDate, days) {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function beijingDateFromIso(isoDateTime) {
+  if (!isoDateTime) return "2026-06-17";
+  return new Date(new Date(isoDateTime).getTime() + BEIJING_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+function beijingTimeFromIso(isoDateTime) {
+  if (!isoDateTime) return "时间待确认";
+  const shifted = new Date(new Date(isoDateTime).getTime() + BEIJING_OFFSET_MS);
+  const hours = String(shifted.getUTCHours()).padStart(2, "0");
+  const minutes = String(shifted.getUTCMinutes()).padStart(2, "0");
+  return `${shifted.toISOString().slice(0, 10)} ${hours}:${minutes} 北京时间`;
+}
+
 function dateRangeKeys(start, end) {
   const keys = [];
   const cursor = new Date(`${start}T00:00:00`);
@@ -173,6 +195,11 @@ function dateRangeKeys(start, end) {
     cursor.setDate(cursor.getDate() + 1);
   }
   return keys;
+}
+
+function syncDateRangeKeysForBeijing(start, end) {
+  // 北京时间某一天对应 UTC 前一天下午到当天傍晚；多抓前后一天避免 ESPN 日期桶漏赛。
+  return dateRangeKeys(addDays(start, -1), addDays(end, 1));
 }
 
 function normalizeDateRange(start, end) {
@@ -250,13 +277,15 @@ function makeSyncedMatch(event) {
   return {
     id: `espn-${event.id}`,
     status: autoStatus,
-    date: event.date?.slice(0, 10) || "2026-06-17",
+    date: beijingDateFromIso(event.date),
+    utcDate: event.date?.slice(0, 10) || "",
+    kickoffTime: beijingTimeFromIso(event.date),
     group: competition.altGameNote?.replace("FIFA World Cup, ", "") || "世界杯",
     venue: competition.venue?.fullName || competition.venue?.displayName || "待确认球场",
     home: homeName,
     away: awayName,
     score,
-    resultNote: completed ? `${status.detail || "FT"} · ${shotsNote}` : `${status.shortDetail || "Scheduled"} · ${shotsNote}`,
+    resultNote: completed ? `${status.detail || "FT"} · ${beijingTimeFromIso(event.date)} · ${shotsNote}` : `${status.shortDetail || "Scheduled"} · ${beijingTimeFromIso(event.date)} · ${shotsNote}`,
     headline: completed ? "已赛比赛，进入复盘样本池。" : "已同步赛程，但还没有完成深度分析。",
     recommendation: completed ? "赛后复盘" : autoStatus === "avoid" ? "建议跳过：热门过深且资料不足" : autoStatus === "watch" ? "谨慎观察：待补资料" : "待补资料：不直接给结论",
     confidence: completed ? 50 : 42,
@@ -330,6 +359,8 @@ function mergeMatch(existing, incoming) {
   existing.espnId = incoming.id;
   existing.venue = existing.venue || incoming.venue;
   existing.group = existing.group || incoming.group;
+  existing.utcDate = incoming.utcDate;
+  existing.kickoffTime = incoming.kickoffTime;
   if (incoming.score !== "未赛") {
     existing.score = incoming.score;
     existing.status = "review";
@@ -356,6 +387,15 @@ function mergeSyncedMatches(events) {
   window.WORLD_CUP_FIXTURES.sort((a, b) => a.date.localeCompare(b.date) || a.home.localeCompare(b.home, "zh-CN"));
 }
 
+function uniqueEvents(events) {
+  const seen = new Set();
+  return events.filter((event) => {
+    if (!event?.id || seen.has(event.id)) return false;
+    seen.add(event.id);
+    return true;
+  });
+}
+
 function renderMatchList() {
   const matches = visibleMatches();
   el.list.innerHTML = matches.length ? matches
@@ -374,7 +414,7 @@ function renderMatchList() {
             <span>${match.away}</span>
           </div>
           <div class="mini-score">
-            <span>可分析度</span>
+            <span>${match.kickoffTime || "可分析度"}</span>
             <strong>${analysisScore}</strong>
             <div class="bar-track"><div class="bar-fill" style="width:${analysisScore}%"></div></div>
           </div>
@@ -395,6 +435,7 @@ function renderHero(match) {
       <div>
         <div class="hero-top">
           <span class="tag">${match.date}</span>
+          <span class="tag">${match.kickoffTime || "北京时间待确认"}</span>
           <span class="tag dark">${match.group}</span>
           <span class="tag dark">${match.venue}</span>
         </div>
@@ -616,14 +657,17 @@ el.syncButtons.forEach((button) => {
 render();
 
 async function fetchScoreboard(dateKey) {
-  const response = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dateKey}`);
+  const endpoint = window.location.protocol.startsWith("http")
+    ? `/api/scoreboard?dates=${dateKey}`
+    : `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dateKey}`;
+  const response = await fetch(endpoint);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   return response.json();
 }
 
 async function syncScoreboard(mode) {
   const [start, end] = normalizeDateRange(state.dateStart || formatIsoDate(), state.dateEnd || state.dateStart || formatIsoDate());
-  const dateKeys = dateRangeKeys(start, end);
+  const dateKeys = syncDateRangeKeysForBeijing(start, end);
   el.syncButtons.forEach((button) => {
     button.disabled = true;
     button.textContent = "同步中";
@@ -632,14 +676,13 @@ async function syncScoreboard(mode) {
   try {
     const payloads = await Promise.all(dateKeys.map(fetchScoreboard));
     const [start, end] = normalizeDateRange(state.dateStart || formatIsoDate(), state.dateEnd || state.dateStart || formatIsoDate());
-    const events = payloads
-      .flatMap((payload) => payload.events || [])
+    const events = uniqueEvents(payloads.flatMap((payload) => payload.events || []))
       .filter((event) => {
-        const eventDate = event.date?.slice(0, 10);
+        const eventDate = beijingDateFromIso(event.date);
         return eventDate && eventDate >= start && eventDate <= end;
       });
     mergeSyncedMatches(events);
-    state.syncNotice = start === end ? `ESPN ${start} · 显示 ${events.length} 场` : `ESPN ${start} 至 ${end} · 显示 ${events.length} 场`;
+    state.syncNotice = start === end ? `北京时间 ${start} · 显示 ${events.length} 场` : `北京时间 ${start} 至 ${end} · 显示 ${events.length} 场`;
     const firstVisible = visibleMatches()[0] || window.WORLD_CUP_FIXTURES.find((match) => match.id.startsWith("espn-"));
     if (firstVisible) state.selectedId = firstVisible.id;
   } catch (error) {
