@@ -11,6 +11,7 @@ const SQUAD_DIR = path.join(CACHE_DIR, "squads");
 const PLAYER_DIR = path.join(CACHE_DIR, "players");
 const TEAM_CACHE = path.join(CACHE_DIR, "teams.json");
 const MODEL_CONFIG = path.join(__dirname, "model-config.json");
+const PREMATCH_SKILL = path.join(__dirname, "agent-skills", "prematch-analysis.md");
 const SQUAD_TTL_MS = Number(process.env.SQUAD_TTL_HOURS || 12) * 60 * 60 * 1000;
 const PLAYER_TTL_MS = Number(process.env.PLAYER_TTL_HOURS || 48) * 60 * 60 * 1000;
 const STATIC_TYPES = {
@@ -463,24 +464,65 @@ function readRequestBody(req) {
   });
 }
 
-function buildEvaluationPrompt(match, config) {
+function readPrematchSkill() {
+  return fs.existsSync(PREMATCH_SKILL) ? fs.readFileSync(PREMATCH_SKILL, "utf8") : "";
+}
+
+function compactTeamDetail(detail) {
+  return {
+    team: detail.team,
+    profile: detail.profile ? {
+      nameZh: detail.profile.nameZh,
+      nameEn: detail.profile.nameEn,
+      squadLink: detail.profile.squadLink,
+      source: detail.profile.source,
+      updatedAt: detail.profile.updatedAt
+    } : null,
+    players: (detail.players || []).map((player) => ({
+      name: player.name,
+      jersey: player.jersey,
+      position: player.positionZh || player.position,
+      age: player.age,
+      height: player.heightCm || player.height,
+      weight: player.weightKg || player.weight,
+      club: player.clubZh || player.club,
+      nationality: player.nationalityZh || player.nationality
+    })),
+    warning: detail.warning
+  };
+}
+
+async function buildAnalysisInput(match) {
+  const teams = [match?.home, match?.away].filter(Boolean);
+  const teamDetails = await Promise.all(teams.map(async (team) => compactTeamDetail(await getTeamDetail(team))));
+  return {
+    match,
+    teams: teamDetails,
+    generatedAt: new Date().toISOString()
+  };
+}
+
+function buildEvaluationPrompt(analysisInput, config) {
+  const skill = readPrematchSkill();
   return [
-    "你是赛前足球分析智能体，只分析适合分析的比赛，不强行预测精确比分。",
-    "重点判断上半场和全场大致走势，必须说明不确定性、过滤理由、信息缺口和可靠来源。",
-    "分析优先级：教练策略与执行风格、战术对位、球员实力边界、首发/伤停/轮换、赛程动机、市场校验、不可预测事件。",
-    "前置纪律：实力断层局、资料不足局、市场过热且战术证据不足时，应降级或跳过。",
+    "你是赛前足球分析智能体。你的目标不是评价页面，而是基于输入信息分析比赛走势。",
+    "必须输出：1）是否可分析/是否建议跳过；2）上半场走势；3）全场走势边界；4）最关键证据；5）信息缺口；6）来源可靠性；7）不确定性。",
+    "不要承诺精确比分，不要承诺稳定盈利。可以给倾向，但必须说明证据强弱和过滤纪律。",
+    `分析技能：\n${skill}`,
     `当前配置：${JSON.stringify(config)}`,
-    `比赛输入：${JSON.stringify(match)}`
+    `比赛与球队输入：${JSON.stringify(analysisInput)}`
   ].join("\n\n");
 }
 
 async function evaluateWithModel(match, config) {
-  const prompt = buildEvaluationPrompt(match, config);
+  const analysisInput = await buildAnalysisInput(match);
+  const prompt = buildEvaluationPrompt(analysisInput, config);
   if (!process.env.LLM_API_URL || !process.env.LLM_API_KEY || !process.env.LLM_MODEL) {
     return {
       ok: false,
       mode: "prompt-only",
-      warning: "未配置 LLM_API_URL / LLM_API_KEY / LLM_MODEL，已返回可直接发送给大模型的输入包。",
+      warning: "未配置 LLM_API_URL / LLM_API_KEY / LLM_MODEL，已返回可直接发送给大模型的赛前分析输入包。",
+      analysisInput,
       prompt
     };
   }
@@ -494,7 +536,7 @@ async function evaluateWithModel(match, config) {
     body: JSON.stringify({
       model: process.env.LLM_MODEL,
       messages: [
-        { role: "system", content: "你是严谨的足球赛前分析师，禁止承诺稳定盈利。" },
+        { role: "system", content: "你是严谨的足球赛前分析师。你分析比赛走势和过滤纪律，禁止承诺稳定盈利。" },
         { role: "user", content: prompt }
       ],
       temperature: Number(config.model?.temperature ?? 0.2)

@@ -131,8 +131,33 @@ function matchesDateRange(match) {
   return match.date >= start && match.date <= end;
 }
 
+function dateRangeMatches() {
+  return window.WORLD_CUP_FIXTURES.filter(matchesDateRange);
+}
+
+function filterCounts() {
+  return dateRangeMatches().reduce((counts, match) => {
+    counts.all += 1;
+    counts[match.status] = (counts[match.status] || 0) + 1;
+    return counts;
+  }, { all: 0 });
+}
+
+function ensureUsableFilter() {
+  const counts = filterCounts();
+  if (state.filter !== "all" && !counts[state.filter]) {
+    state.filter = "all";
+  }
+  document.querySelectorAll(".filter-tabs button").forEach((button) => {
+    const count = counts[button.dataset.filter] || 0;
+    button.classList.toggle("active", button.dataset.filter === state.filter);
+    button.disabled = count === 0;
+    button.dataset.count = count;
+  });
+}
+
 function visibleMatches() {
-  let matches = window.WORLD_CUP_FIXTURES.filter(matchesDateRange);
+  let matches = dateRangeMatches();
   if (state.filter !== "all") {
     matches = matches.filter((match) => match.status === state.filter);
   }
@@ -215,6 +240,7 @@ function applyDateRange() {
   state.dateEnd = end;
   el.dateStart.value = start;
   el.dateEnd.value = end;
+  ensureUsableFilter();
   const next = visibleMatches()[0];
   if (next) state.selectedId = next.id;
   render();
@@ -399,6 +425,7 @@ function uniqueEvents(events) {
 }
 
 function renderMatchList() {
+  ensureUsableFilter();
   const matches = visibleMatches();
   el.list.innerHTML = matches.length ? matches
     .map((match) => {
@@ -598,6 +625,7 @@ function renderWeights() {
 }
 
 function render() {
+  ensureUsableFilter();
   const match = getSelectedMatch();
   renderMatchList();
   renderHero(match);
@@ -611,6 +639,7 @@ function render() {
 
 document.querySelectorAll(".filter-tabs button").forEach((button) => {
   button.addEventListener("click", () => {
+    if (button.disabled) return;
     document.querySelectorAll(".filter-tabs button").forEach((item) => item.classList.remove("active"));
     button.classList.add("active");
     state.filter = button.dataset.filter;
@@ -669,7 +698,7 @@ el.llmEvaluate.addEventListener("click", async () => {
   const match = getSelectedMatch();
   el.llmEvaluate.disabled = true;
   el.llmEvaluate.textContent = "生成中";
-  el.llmResult.textContent = "正在整理当前比赛输入并请求服务端...";
+  el.llmResult.textContent = "正在整理当前比赛、球队资料、球员资料和分析技能...";
   try {
     const response = await fetch("/api/model-evaluate", {
       method: "POST",
@@ -685,7 +714,7 @@ el.llmEvaluate.addEventListener("click", async () => {
     el.llmResult.textContent = `生成失败：${error.message}`;
   } finally {
     el.llmEvaluate.disabled = false;
-    el.llmEvaluate.textContent = "生成评价";
+    el.llmEvaluate.textContent = "生成赛前分析";
   }
 });
 
