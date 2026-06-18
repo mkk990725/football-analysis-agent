@@ -4,7 +4,7 @@ const state = {
   dateStart: "2026-06-17",
   dateEnd: "2026-06-17",
   sortMode: "score-desc",
-  syncNotice: "本地样本 · 可手动同步",
+  predictions: {},
   weights: {
     strength: 1.25,
     coach: 1.2,
@@ -81,18 +81,13 @@ const el = {
   script: document.getElementById("scriptPanel"),
   factors: document.getElementById("factorList"),
   ring: document.getElementById("confidenceRing"),
-  weights: document.getElementById("weightsGrid"),
   moduleGrid: document.getElementById("moduleGrid"),
-  syncButtons: Array.from(document.querySelectorAll("[data-sync-mode]")),
-  syncStatus: document.querySelector(".sync-panel strong"),
   dateStart: document.getElementById("dateStart"),
   dateEnd: document.getElementById("dateEnd"),
   applyDate: document.getElementById("applyDate"),
   sortMode: document.getElementById("sortMode"),
-  rankingList: document.getElementById("rankingList"),
-  rankingCount: document.getElementById("rankingCount"),
-  llmEvaluate: document.getElementById("llmEvaluate"),
-  llmResult: document.getElementById("llmResult"),
+  predictionResult: document.getElementById("predictionResult"),
+  predictLink: document.getElementById("predictLink"),
 };
 
 function zhTeam(name) {
@@ -112,6 +107,8 @@ function factorSummary(factor) {
 }
 
 function normalizedAnalysisScore(match) {
+  const prediction = predictionFor(match);
+  if (prediction?.score) return Number(prediction.score);
   const entries = Object.entries(match.factors);
   const totalWeight = entries.reduce((sum, [key]) => sum + Math.abs(state.weights[key]), 0);
   const weighted = entries.reduce((sum, [key, factor]) => sum + factorScore(factor) * state.weights[key], 0);
@@ -167,13 +164,18 @@ function visibleMatches() {
 function sortMatches(matches) {
   return [...matches].sort((a, b) => {
     if (state.sortMode === "score-desc") {
-      return normalizedAnalysisScore(b) - normalizedAnalysisScore(a) || a.date.localeCompare(b.date);
+      const predicted = Number(Boolean(predictionFor(b))) - Number(Boolean(predictionFor(a)));
+      return predicted || a.date.localeCompare(b.date);
     }
     if (state.sortMode === "date-desc") {
       return b.date.localeCompare(a.date) || normalizedAnalysisScore(b) - normalizedAnalysisScore(a);
     }
     return a.date.localeCompare(b.date) || normalizedAnalysisScore(b) - normalizedAnalysisScore(a);
   });
+}
+
+function predictionFor(match) {
+  return state.predictions[match.id] || state.predictions[`${match.date}|${match.home}|${match.away}`];
 }
 
 function statusClass(match) {
@@ -244,6 +246,7 @@ function applyDateRange() {
   const next = visibleMatches()[0];
   if (next) state.selectedId = next.id;
   render();
+  refreshScoreboards().then(render).catch(() => {});
 }
 
 function getStat(competitor, name) {
@@ -430,7 +433,7 @@ function renderMatchList() {
   el.list.innerHTML = matches.length ? matches
     .map((match) => {
       const active = match.id === state.selectedId ? " active" : "";
-      const analysisScore = normalizedAnalysisScore(match);
+      const prediction = predictionFor(match);
       return `
         <button class="match-card${active}" data-match-id="${match.id}" type="button">
           <div class="match-card-top">
@@ -444,8 +447,7 @@ function renderMatchList() {
           </div>
           <div class="mini-score">
             <span>${match.kickoffTime || "可分析度"}</span>
-            <strong>${analysisScore}</strong>
-            <div class="bar-track"><div class="bar-fill" style="width:${analysisScore}%"></div></div>
+            <strong>${prediction ? "已预测" : "未预测"}</strong>
           </div>
         </button>
       `;
@@ -454,10 +456,7 @@ function renderMatchList() {
 }
 
 function renderHero(match) {
-  const analysisScore = normalizedAnalysisScore(match);
   const teamsHref = `teams.html?match=${encodeURIComponent(match.id)}`;
-  el.ring.style.setProperty("--score", `${analysisScore}%`);
-  el.ring.dataset.score = `${analysisScore}`;
 
   el.hero.innerHTML = `
     <div class="hero-content">
@@ -485,7 +484,7 @@ function renderHero(match) {
         </div>
         <div class="badges-row">
           <span class="tag">${match.recommendation}</span>
-          <span class="tag">可分析度 ${analysisScore}</span>
+          <span class="tag">${predictionFor(match) ? "已有大模型预测" : "未生成预测"}</span>
           <a class="tag link-tag" href="${teamsHref}">双方球队情报</a>
         </div>
         <p class="hero-subtitle">${match.resultNote}</p>
@@ -496,12 +495,12 @@ function renderHero(match) {
 
 function renderModules(match) {
   const teamsHref = `teams.html?match=${encodeURIComponent(match.id)}`;
-  const analysisScore = normalizedAnalysisScore(match);
+  const predictHref = `predict.html?match=${encodeURIComponent(match.id)}`;
   el.moduleGrid.innerHTML = `
-    <a class="module-card" href="#matchJudgment" data-scroll-target="matchJudgment">
+    <a class="module-card accent" href="${predictHref}">
       <span>01</span>
-      <strong>赛前判断</strong>
-      <p>建议方向、规避项和风险等级。当前可分析度 ${analysisScore}。</p>
+      <strong>生成预测</strong>
+      <p>进入预测模块，选择日期和比赛后调用大模型。</p>
     </a>
     <a class="module-card" href="#matchScript" data-scroll-target="matchScript">
       <span>02</span>
@@ -522,106 +521,19 @@ function renderModules(match) {
 }
 
 function renderVerdicts(match) {
-  el.verdict.innerHTML = match.verdicts
-    .map(([title, risk, action, detail]) => `
-      <div class="verdict-card">
-        <div class="verdict-top">
-          <h3>${title}</h3>
-          <span class="risk-pill ${risk}">${riskText[risk]}</span>
-        </div>
-        <p><strong>${action}</strong> · ${detail}</p>
-      </div>
-    `)
-    .join("");
+  const prediction = predictionFor(match);
+  el.predictionResult.innerHTML = prediction
+    ? `<pre>${JSON.stringify(prediction.result || prediction, null, 2)}</pre>`
+    : `<div class="empty-state">这场比赛还没有大模型预测结果。请进入预测模块生成。</div>`;
+  if (el.predictLink) el.predictLink.href = `predict.html?match=${encodeURIComponent(match.id)}`;
 }
 
 function renderScripts(match) {
-  const scenarios = match.scripts.scenarios
-    .map(([label, value]) => `
-      <span class="scenario-chip"><strong>${value}%</strong>${label}</span>
-    `)
-    .join("");
-
-  el.script.innerHTML = `
-    <div class="script-card">
-      <div class="script-row">
-        <h3>上半场主剧本</h3>
-        <span class="tag">45分钟</span>
-      </div>
-      <p>${match.scripts.half}</p>
-      <div class="scenario-chips">${scenarios}</div>
-    </div>
-    <div class="script-card">
-      <div class="script-row">
-        <h3>全场走势边界</h3>
-        <span class="tag">90分钟</span>
-      </div>
-      <p>${match.scripts.full}</p>
-      <div class="scenario-bars">
-        <div>
-          <div class="bar-label"><span>可分析度</span><span>${normalizedAnalysisScore(match)}%</span></div>
-          <div class="bar-track"><div class="bar-fill" style="width:${normalizedAnalysisScore(match)}%"></div></div>
-        </div>
-        <div>
-          <div class="bar-label"><span>跳过必要性</span><span>${match.status === "avoid" ? 82 : match.status === "synced" ? 74 : 38}%</span></div>
-          <div class="bar-track"><div class="bar-fill" style="width:${match.status === "avoid" ? 82 : match.status === "synced" ? 74 : 38}%"></div></div>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function renderRanking() {
-  const candidates = sortMatches(window.WORLD_CUP_FIXTURES.filter((match) => isFutureMatch(match) && matchesDateRange(match)));
-  el.rankingCount.textContent = `${candidates.length}场`;
-  el.rankingList.innerHTML = candidates.map((match, index) => {
-    const score = normalizedAnalysisScore(match);
-    return `
-      <button class="ranking-item" data-match-id="${match.id}" type="button">
-        <span>${index + 1}</span>
-        <strong>${match.home} vs ${match.away}</strong>
-        <em>${score}</em>
-        <div class="bar-track"><div class="bar-fill" style="width:${score}%"></div></div>
-      </button>
-    `;
-  }).join("");
+  el.script.innerHTML = `<div class="empty-state">走势推演由大模型预测生成，当前为空。</div>`;
 }
 
 function renderFactors(match) {
-  el.factors.innerHTML = Object.entries(match.factors)
-    .map(([key, factor]) => {
-      const score = factorScore(factor);
-      const sources = factor.sources?.length ? factor.sources.join("、") : "待补充可靠来源";
-      return `
-        <div class="factor-card">
-          <div class="factor-top">
-            <strong>${window.FACTOR_META[key]}</strong>
-            <span class="factor-score ${key === "uncertainty" ? "warn" : ""}">${score}</span>
-          </div>
-          <p>${factorSummary(factor)}</p>
-          <details class="factor-detail">
-            <summary>查看依据与来源要求</summary>
-            <p>${factor.evidence || "该因子还没有展开证据链。"}</p>
-            <p class="source-line">来源要求：${sources}</p>
-          </details>
-        </div>
-      `;
-    })
-    .join("");
-}
-
-function renderWeights() {
-  el.weights.innerHTML = Object.entries(state.weights)
-    .map(([key, weight]) => `
-      <div class="weight-card">
-        <div class="weight-top">
-          <span>${window.FACTOR_META[key]}</span>
-          <span>${weight.toFixed(2)}</span>
-        </div>
-        <input type="range" min="-1.5" max="1.5" step="0.05" value="${weight}" data-weight="${key}" aria-label="${window.FACTOR_META[key]}权重" />
-      </div>
-    `)
-    .join("");
+  el.factors.innerHTML = `<div class="empty-state">模型证据、信息缺口和来源可信度会在生成预测后展示。</div>`;
 }
 
 function render() {
@@ -633,8 +545,6 @@ function render() {
   renderVerdicts(match);
   renderScripts(match);
   renderFactors(match);
-  renderWeights();
-  renderRanking();
 }
 
 document.querySelectorAll(".filter-tabs button").forEach((button) => {
@@ -658,31 +568,11 @@ el.list.addEventListener("click", (event) => {
   render();
 });
 
-el.rankingList.addEventListener("click", (event) => {
-  const item = event.target.closest("[data-match-id]");
-  if (!item) return;
-  state.selectedId = item.dataset.matchId;
-  render();
-});
-
-el.weights.addEventListener("input", (event) => {
-  const input = event.target.closest("[data-weight]");
-  if (!input) return;
-  state.weights[input.dataset.weight] = Number(input.value);
-  render();
-});
-
 el.applyDate.addEventListener("click", applyDateRange);
 
 el.sortMode.addEventListener("change", () => {
   state.sortMode = el.sortMode.value;
   render();
-});
-
-el.syncButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    syncScoreboard(button.dataset.syncMode);
-  });
 });
 
 el.moduleGrid.addEventListener("click", (event) => {
@@ -694,31 +584,13 @@ el.moduleGrid.addEventListener("click", (event) => {
   target.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
-el.llmEvaluate.addEventListener("click", async () => {
-  const match = getSelectedMatch();
-  el.llmEvaluate.disabled = true;
-  el.llmEvaluate.textContent = "生成中";
-  el.llmResult.textContent = "正在整理当前比赛、球队资料、球员资料和分析技能...";
-  try {
-    const response = await fetch("/api/model-evaluate", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ match })
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const payload = await response.json();
-    el.llmResult.textContent = payload.mode === "prompt-only"
-      ? `${payload.warning}\n\n${payload.prompt}`
-      : JSON.stringify(payload.result, null, 2);
-  } catch (error) {
-    el.llmResult.textContent = `生成失败：${error.message}`;
-  } finally {
-    el.llmEvaluate.disabled = false;
-    el.llmEvaluate.textContent = "生成赛前分析";
-  }
-});
-
-render();
+loadPredictions()
+  .then(refreshScoreboards)
+  .finally(render);
+setInterval(() => {
+  refreshScoreboards().catch(() => {});
+  loadPredictions().then(render).catch(() => {});
+}, 30 * 1000);
 
 async function fetchScoreboard(dateKey) {
   const endpoint = window.location.protocol.startsWith("http")
@@ -729,34 +601,20 @@ async function fetchScoreboard(dateKey) {
   return response.json();
 }
 
-async function syncScoreboard(mode) {
-  const [start, end] = normalizeDateRange(state.dateStart || formatIsoDate(), state.dateEnd || state.dateStart || formatIsoDate());
-  const dateKeys = syncDateRangeKeysForBeijing(start, end);
-  el.syncButtons.forEach((button) => {
-    button.disabled = true;
-    button.textContent = "同步中";
-  });
+async function loadPredictions() {
+  if (!window.location.protocol.startsWith("http")) return;
+  const response = await fetch("/api/predictions");
+  if (response.ok) state.predictions = await response.json();
+}
 
-  try {
-    const payloads = await Promise.all(dateKeys.map(fetchScoreboard));
-    const [start, end] = normalizeDateRange(state.dateStart || formatIsoDate(), state.dateEnd || state.dateStart || formatIsoDate());
-    const events = uniqueEvents(payloads.flatMap((payload) => payload.events || []))
-      .filter((event) => {
-        const eventDate = beijingDateFromIso(event.date);
-        return eventDate && eventDate >= start && eventDate <= end;
-      });
-    mergeSyncedMatches(events);
-    state.syncNotice = start === end ? `北京时间 ${start} · 显示 ${events.length} 场` : `北京时间 ${start} 至 ${end} · 显示 ${events.length} 场`;
-    const firstVisible = visibleMatches()[0] || window.WORLD_CUP_FIXTURES.find((match) => match.id.startsWith("espn-"));
-    if (firstVisible) state.selectedId = firstVisible.id;
-  } catch (error) {
-    state.syncNotice = "同步失败，继续使用本地样本";
-  } finally {
-    el.syncButtons.forEach((button) => {
-      button.disabled = false;
-      button.textContent = "同步赛程";
+async function refreshScoreboards() {
+  if (!window.location.protocol.startsWith("http")) return;
+  const [start, end] = normalizeDateRange(state.dateStart || formatIsoDate(), state.dateEnd || state.dateStart || formatIsoDate());
+  const payloads = await Promise.all(syncDateRangeKeysForBeijing(start, end).map(fetchScoreboard));
+  const events = uniqueEvents(payloads.flatMap((payload) => payload.events || []))
+    .filter((event) => {
+      const eventDate = beijingDateFromIso(event.date);
+      return eventDate && eventDate >= start && eventDate <= end;
     });
-    el.syncStatus.textContent = state.syncNotice;
-    render();
-  }
+  mergeSyncedMatches(events);
 }

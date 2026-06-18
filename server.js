@@ -4,7 +4,7 @@ const path = require("path");
 
 const PORT = Number(process.env.PORT || 5174);
 const HOST = process.env.HOST || "127.0.0.1";
-const POLL_MINUTES = Number(process.env.POLL_MINUTES || 15);
+const POLL_MINUTES = Number(process.env.POLL_MINUTES || 0.5);
 const CACHE_DIR = path.join(__dirname, ".cache");
 const SCOREBOARD_DIR = path.join(CACHE_DIR, "scoreboard");
 const SQUAD_DIR = path.join(CACHE_DIR, "squads");
@@ -12,6 +12,7 @@ const PLAYER_DIR = path.join(CACHE_DIR, "players");
 const TEAM_CACHE = path.join(CACHE_DIR, "teams.json");
 const MODEL_CONFIG = path.join(__dirname, "model-config.json");
 const PREMATCH_SKILL = path.join(__dirname, "agent-skills", "prematch-analysis.md");
+const PREDICTION_CACHE = path.join(CACHE_DIR, "predictions.json");
 const SQUAD_TTL_MS = Number(process.env.SQUAD_TTL_HOURS || 12) * 60 * 60 * 1000;
 const PLAYER_TTL_MS = Number(process.env.PLAYER_TTL_HOURS || 48) * 60 * 60 * 1000;
 const STATIC_TYPES = {
@@ -472,6 +473,16 @@ function readModelConfig() {
   return {};
 }
 
+function readPredictions() {
+  if (fs.existsSync(PREDICTION_CACHE)) return JSON.parse(fs.readFileSync(PREDICTION_CACHE, "utf8"));
+  return {};
+}
+
+function writePredictions(predictions) {
+  fs.writeFileSync(PREDICTION_CACHE, JSON.stringify(predictions, null, 2));
+  return predictions;
+}
+
 function writeModelConfig(config) {
   fs.writeFileSync(MODEL_CONFIG, JSON.stringify(config, null, 2));
   return config;
@@ -587,6 +598,28 @@ async function evaluateWithModel(match, config) {
   };
 }
 
+function matchPredictionKey(match) {
+  return match?.id || `${match?.date || ""}|${match?.home || ""}|${match?.away || ""}`;
+}
+
+async function predictMatch(match) {
+  const config = readModelConfig();
+  const result = await evaluateWithModel(match, config);
+  if (result.mode !== "llm") return result;
+  const predictions = readPredictions();
+  const key = matchPredictionKey(match);
+  predictions[key] = {
+    matchId: match?.id || "",
+    date: match?.date || "",
+    home: match?.home || "",
+    away: match?.away || "",
+    generatedAt: new Date().toISOString(),
+    result: result.result
+  };
+  writePredictions(predictions);
+  return { ...result, saved: predictions[key] };
+}
+
 async function getTeamDetail(teamName) {
   const teams = fs.existsSync(TEAM_CACHE) ? JSON.parse(fs.readFileSync(TEAM_CACHE, "utf8")) : {};
   const team = teams[teamName];
@@ -695,7 +728,7 @@ async function handleApi(req, res, url) {
       pollMinutes: POLL_MINUTES,
       cacheDir: CACHE_DIR,
       sources: ["ESPN scoreboard allowlist", "ESPN squad allowlist"],
-      note: "This service polls safe allowlisted data sources. It does not run a prediction model yet."
+      note: "This service polls safe allowlisted data sources. Prediction runs only after API URL, API key, and model name are configured."
     });
   }
 
@@ -730,6 +763,16 @@ async function handleApi(req, res, url) {
     if (req.method !== "POST") return jsonResponse(res, 405, { error: "POST required" });
     const body = await readRequestBody(req);
     return jsonResponse(res, 200, await evaluateWithModel(body.match, readModelConfig()));
+  }
+
+  if (url.pathname === "/api/predictions") {
+    return jsonResponse(res, 200, readPredictions());
+  }
+
+  if (url.pathname === "/api/predict") {
+    if (req.method !== "POST") return jsonResponse(res, 405, { error: "POST required" });
+    const body = await readRequestBody(req);
+    return jsonResponse(res, 200, await predictMatch(body.match));
   }
 
   if (url.pathname === "/api/sync-now") {

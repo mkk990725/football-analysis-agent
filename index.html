@@ -14,12 +14,13 @@
           <div class="brand-mark"><img src="favicon.svg" alt="" /></div>
           <div>
             <h1>赛前分析台</h1>
-            <p>世界杯赛程 · 可解释筛选</p>
+            <p>世界杯赛程 · 模型预测工作台</p>
           </div>
         </div>
 
         <nav class="side-nav" aria-label="主导航">
           <a class="active" href="index.html">比赛分析</a>
+          <a href="predict.html">预测模块</a>
           <a href="config.html">模型配置</a>
           <a href="teams.html">球队资料</a>
           <a href="skills.html">分析技能</a>
@@ -27,18 +28,12 @@
       </aside>
 
       <main class="main-panel">
-        <section class="control-section">
-          <div class="sync-panel">
-            <div>
-              <span class="muted-label">数据状态</span>
-              <strong>本地样本 · 可手动同步</strong>
-              <p class="sync-note">服务模式会轮询白名单数据源；点击同步会按当前日期范围拉取最新赛程。</p>
-            </div>
-            <div class="sync-actions">
-              <button data-sync-mode="selected" type="button" title="同步当前日期范围内的世界杯比赛">同步赛程</button>
-            </div>
+        <section class="analysis-toolbar">
+          <div>
+            <span class="muted-label">后台自动更新</span>
+            <h1>比赛分析</h1>
+            <p>赛程由服务端每 30 秒轮询更新；预测结果来自“预测模块”调用大模型后同步。</p>
           </div>
-
           <div class="date-panel">
             <div class="date-range-fields">
               <label>
@@ -54,32 +49,24 @@
             <label>
               <span class="muted-label">排序</span>
               <select id="sortMode">
-                <option value="score-desc">可分析度从高到低</option>
+                <option value="score-desc">有预测优先</option>
                 <option value="date-asc">比赛日期从近到远</option>
                 <option value="date-desc">比赛日期从远到近</option>
               </select>
             </label>
           </div>
-
-          <div class="filter-tabs" role="tablist" aria-label="比赛筛选">
-            <button class="active" data-filter="all" type="button">全部</button>
-            <button data-filter="actionable" type="button">推荐关注</button>
-            <button data-filter="watch" type="button">谨慎观察</button>
-            <button data-filter="avoid" type="button">建议跳过</button>
-            <button data-filter="synced" type="button">待补资料</button>
-            <button data-filter="review" type="button">已赛复盘</button>
-          </div>
         </section>
 
-        <section class="match-browser">
-          <section class="ranking-panel">
-            <div class="ranking-head">
-              <span class="muted-label">当前日期范围 · 未赛排行</span>
-              <strong id="rankingCount">0场</strong>
-            </div>
-            <div id="rankingList" class="ranking-list"></div>
-          </section>
+        <section class="filter-tabs" role="tablist" aria-label="比赛筛选">
+          <button class="active" data-filter="all" type="button">全部</button>
+          <button data-filter="actionable" type="button">推荐关注</button>
+          <button data-filter="watch" type="button">谨慎观察</button>
+          <button data-filter="avoid" type="button">建议跳过</button>
+          <button data-filter="synced" type="button">待补资料</button>
+          <button data-filter="review" type="button">已赛复盘</button>
+        </section>
 
+        <section class="analysis-layout">
           <section class="match-list-panel">
             <div class="section-head compact">
               <div>
@@ -89,63 +76,43 @@
             </div>
             <div class="match-list" id="matchList" aria-label="比赛列表"></div>
           </section>
-        </section>
 
-        <section class="match-hero" id="matchHero"></section>
+          <section class="analysis-detail">
+            <section class="match-hero" id="matchHero"></section>
+            <section class="module-grid" id="moduleGrid"></section>
 
-        <section class="module-grid" id="moduleGrid"></section>
+            <section class="content-grid">
+              <article class="primary-stack" id="matchJudgment">
+                <div class="section-head">
+                  <div>
+                    <span class="muted-label">大模型预测结果</span>
+                    <h2>赛前判断</h2>
+                  </div>
+                  <a class="tag link-tag" id="predictLink" href="predict.html">去预测模块</a>
+                </div>
+                <div class="prediction-result" id="predictionResult"></div>
 
-        <section class="content-grid">
-          <article class="primary-stack" id="matchJudgment">
-            <div class="section-head">
-              <div>
-                <span class="muted-label">赛前初筛</span>
-                <h2>建议方向与规避项</h2>
-              </div>
-              <div class="confidence-ring" id="confidenceRing" aria-label="可分析度"></div>
-            </div>
-            <div class="verdict-grid" id="verdictGrid"></div>
+                <div class="section-head compact" id="matchScript">
+                  <div>
+                    <span class="muted-label">走势推演</span>
+                    <h2>上半场 / 全场</h2>
+                  </div>
+                </div>
+                <div class="script-panel" id="scriptPanel"></div>
+              </article>
 
-            <div class="section-head compact" id="matchScript">
-              <div>
-                <span class="muted-label">比赛剧本</span>
-                <h2>上半场 / 全场</h2>
-              </div>
-            </div>
-            <div class="script-panel" id="scriptPanel"></div>
-          </article>
-
-          <aside class="side-stack" id="factorSection">
-            <div class="section-head compact">
-              <div>
-                <span class="muted-label">判断依据</span>
-                <h2>因子评分</h2>
-              </div>
-            </div>
-            <div class="factor-note">
-              分数越高，表示该因子的信号越强；“不确定性”越高则越应该谨慎。
-            </div>
-            <div class="factor-list" id="factorList"></div>
-          </aside>
-        </section>
-
-        <section class="model-section">
-          <div class="section-head">
-            <div>
-              <span class="muted-label">模型版本 v0.3</span>
-              <h2>大模型赛前分析</h2>
-            </div>
-            <p>模型会读取配置页里的 Key、URL、模型名、权重和输入项，并把当前比赛及双方球队资料打包分析。</p>
-          </div>
-          <div class="llm-panel">
-            <div>
-              <strong>生成赛前分析</strong>
-              <p>输入当前比赛、球队资料、球员资料、配置权重和分析技能，输出上半场与全场走势判断。</p>
-            </div>
-            <button id="llmEvaluate" type="button">生成赛前分析</button>
-          </div>
-          <pre class="llm-result" id="llmResult"></pre>
-          <div class="weights-grid" id="weightsGrid"></div>
+              <aside class="side-stack" id="factorSection">
+                <div class="section-head compact">
+                  <div>
+                    <span class="muted-label">模型输入</span>
+                    <h2>信息完整度</h2>
+                  </div>
+                </div>
+                <div class="factor-note">这里不再展示硬编码预测分数。生成预测后，会展示模型返回的证据、缺口和来源可信度。</div>
+                <div class="factor-list" id="factorList"></div>
+              </aside>
+            </section>
+          </section>
         </section>
       </main>
     </div>
