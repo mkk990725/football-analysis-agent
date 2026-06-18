@@ -91,6 +91,8 @@ const el = {
   sortMode: document.getElementById("sortMode"),
   rankingList: document.getElementById("rankingList"),
   rankingCount: document.getElementById("rankingCount"),
+  llmEvaluate: document.getElementById("llmEvaluate"),
+  llmResult: document.getElementById("llmResult"),
 };
 
 function zhTeam(name) {
@@ -661,6 +663,30 @@ el.moduleGrid.addEventListener("click", (event) => {
   if (!target) return;
   event.preventDefault();
   target.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+el.llmEvaluate.addEventListener("click", async () => {
+  const match = getSelectedMatch();
+  el.llmEvaluate.disabled = true;
+  el.llmEvaluate.textContent = "生成中";
+  el.llmResult.textContent = "正在整理当前比赛输入并请求服务端...";
+  try {
+    const response = await fetch("/api/model-evaluate", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ match })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    el.llmResult.textContent = payload.mode === "prompt-only"
+      ? `${payload.warning}\n\n${payload.prompt}`
+      : JSON.stringify(payload.result, null, 2);
+  } catch (error) {
+    el.llmResult.textContent = `生成失败：${error.message}`;
+  } finally {
+    el.llmEvaluate.disabled = false;
+    el.llmEvaluate.textContent = "生成评价";
+  }
 });
 
 render();

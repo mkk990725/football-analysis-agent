@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>模型配置</title>
+    <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="config-shell">
+      <aside class="config-nav">
+        <div class="brand-block">
+          <div class="brand-mark"><img src="favicon.svg" alt="" /></div>
+          <div>
+            <h1>模型配置</h1>
+            <p>权重、输入项、分析纪律</p>
+          </div>
+        </div>
+        <nav class="side-nav" aria-label="配置导航">
+          <a href="index.html">比赛分析</a>
+          <a class="active" href="config.html">模型配置</a>
+          <a href="teams.html">球队资料</a>
+          <a href="agent-skills/prematch-analysis.md" target="_blank" rel="noreferrer">分析技能</a>
+        </nav>
+      </aside>
+      <main class="config-main">
+        <section class="config-hero">
+          <div>
+            <span class="tag">v0.3</span>
+            <h1>把判断规则交给配置，把结论交给大模型解释</h1>
+            <p>这里维护模型调用、因子权重、输入字段和赛前分析纪律。没有配置 API Key 时，系统只生成可复制的 prompt 包。</p>
+          </div>
+          <button id="saveConfig" type="button">保存配置</button>
+        </section>
+
+        <section class="config-grid">
+          <article class="config-card">
+            <h2>模型配置</h2>
+            <label>
+              <span class="muted-label">模型名称</span>
+              <input id="modelName" type="text" />
+            </label>
+            <label>
+              <span class="muted-label">温度</span>
+              <input id="temperature" type="number" min="0" max="1" step="0.05" />
+            </label>
+            <p class="config-note">实际请求地址和密钥通过服务环境变量配置：LLM_API_URL、LLM_API_KEY、LLM_MODEL。</p>
+          </article>
+
+          <article class="config-card">
+            <h2>因子权重</h2>
+            <div class="config-weights" id="configWeights"></div>
+          </article>
+
+          <article class="config-card wide">
+            <h2>输入到模型的信息</h2>
+            <div class="config-checks" id="configInputs"></div>
+          </article>
+
+          <article class="config-card wide">
+            <h2>分析纪律</h2>
+            <textarea id="disciplineText" rows="9"></textarea>
+          </article>
+
+          <article class="config-card wide">
+            <h2>信息源优先级</h2>
+            <div id="sourcePolicy" class="source-policy-text"></div>
+          </article>
+        </section>
+
+        <div class="config-status" id="configStatus"></div>
+      </main>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="config.js"></script>
+  </body>
+</html>

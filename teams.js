@@ -65,6 +65,7 @@ function renderPlayerRows(players) {
             <th>年龄</th>
             <th>身高</th>
             <th>体重</th>
+            <th>俱乐部</th>
             <th>国籍</th>
           </tr>
         </thead>
@@ -75,11 +76,12 @@ function renderPlayerRows(players) {
               <td>
                 ${player.href ? `<a href="${escapeHtml(player.href)}" target="_blank" rel="noreferrer">${escapeHtml(player.name)}</a>` : escapeHtml(player.name)}
               </td>
-              <td>${escapeHtml(player.position || "-")}</td>
+              <td>${escapeHtml(player.positionZh || player.position || "-")}</td>
               <td>${escapeHtml(player.age || "-")}</td>
-              <td>${escapeHtml(player.height || "-")}</td>
-              <td>${escapeHtml(player.weight || "-")}</td>
-              <td>${escapeHtml(player.nationality || "-")}</td>
+              <td>${escapeHtml(player.heightCm || player.height || "-")}</td>
+              <td>${escapeHtml(player.weightKg || player.weight || "-")}</td>
+              <td>${escapeHtml(player.clubZh || player.club || "待校验")}</td>
+              <td>${escapeHtml(player.nationalityZh || player.nationality || "-")}</td>
             </tr>
           `).join("")}
         </tbody>

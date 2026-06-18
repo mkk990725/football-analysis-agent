@@ -18,6 +18,12 @@
           </div>
         </div>
 
+        <nav class="side-nav compact-nav" aria-label="主导航">
+          <a class="active" href="index.html">比赛分析</a>
+          <a href="config.html">模型配置</a>
+          <a href="teams.html">球队资料</a>
+        </nav>
+
         <div class="sync-panel">
           <div>
             <span class="muted-label">数据状态</span>
@@ -118,6 +124,14 @@
             </div>
             <p>这里不是正式模型训练，只用于观察不同因子升权或降权后，“可分析度”如何变化。</p>
           </div>
+          <div class="llm-panel">
+            <div>
+              <strong>大模型评价</strong>
+              <p>使用模型配置页的权重、输入项和分析纪律，对当前比赛生成一次解释性评价。</p>
+            </div>
+            <button id="llmEvaluate" type="button">生成评价</button>
+          </div>
+          <pre class="llm-result" id="llmResult"></pre>
           <div class="weights-grid" id="weightsGrid"></div>
         </section>
       </main>

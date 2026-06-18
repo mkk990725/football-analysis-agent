@@ -8,8 +8,11 @@ const POLL_MINUTES = Number(process.env.POLL_MINUTES || 15);
 const CACHE_DIR = path.join(__dirname, ".cache");
 const SCOREBOARD_DIR = path.join(CACHE_DIR, "scoreboard");
 const SQUAD_DIR = path.join(CACHE_DIR, "squads");
+const PLAYER_DIR = path.join(CACHE_DIR, "players");
 const TEAM_CACHE = path.join(CACHE_DIR, "teams.json");
+const MODEL_CONFIG = path.join(__dirname, "model-config.json");
 const SQUAD_TTL_MS = Number(process.env.SQUAD_TTL_HOURS || 12) * 60 * 60 * 1000;
+const PLAYER_TTL_MS = Number(process.env.PLAYER_TTL_HOURS || 48) * 60 * 60 * 1000;
 const STATIC_TYPES = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
@@ -63,6 +66,7 @@ const TEAM_NAME_ZH = {
 function ensureDirs() {
   fs.mkdirSync(SCOREBOARD_DIR, { recursive: true });
   fs.mkdirSync(SQUAD_DIR, { recursive: true });
+  fs.mkdirSync(PLAYER_DIR, { recursive: true });
 }
 
 function jsonResponse(res, status, data) {
@@ -153,6 +157,11 @@ function squadCachePath(teamName) {
   return path.join(SQUAD_DIR, `${safeName}.json`);
 }
 
+function playerCachePath(playerHref) {
+  const safeName = encodeURIComponent(playerHref).replace(/%/g, "_");
+  return path.join(PLAYER_DIR, `${safeName}.json`);
+}
+
 function isFresh(file, ttlMs) {
   if (!fs.existsSync(file)) return false;
   return Date.now() - fs.statSync(file).mtimeMs < ttlMs;
@@ -162,6 +171,15 @@ function isAllowedSquadUrl(rawUrl) {
   try {
     const url = new URL(rawUrl);
     return url.hostname === "www.espn.com" && url.pathname.startsWith("/soccer/team/squad/");
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedPlayerUrl(rawUrl) {
+  try {
+    const url = new URL(rawUrl);
+    return url.hostname === "www.espn.com" && url.pathname.startsWith("/soccer/player/");
   } catch {
     return false;
   }
@@ -181,6 +199,183 @@ function decodeHtml(value = "") {
 
 function stripTags(value = "") {
   return decodeHtml(value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " "));
+}
+
+const POSITION_ZH = {
+  G: "门将",
+  GK: "门将",
+  D: "后卫",
+  DF: "后卫",
+  M: "中场",
+  MF: "中场",
+  F: "前锋",
+  FW: "前锋",
+  Goalkeeper: "门将",
+  Defender: "后卫",
+  Midfielder: "中场",
+  Forward: "前锋"
+};
+
+const COUNTRY_ZH = {
+  Portugal: "葡萄牙",
+  Spain: "西班牙",
+  France: "法国",
+  England: "英格兰",
+  Germany: "德国",
+  Italy: "意大利",
+  Netherlands: "荷兰",
+  Japan: "日本",
+  Norway: "挪威",
+  Iraq: "伊拉克",
+  Ghana: "加纳",
+  Panama: "巴拿马",
+  Croatia: "克罗地亚",
+  Colombia: "哥伦比亚",
+  Uzbekistan: "乌兹别克斯坦",
+  "Cape Verde": "佛得角",
+  "Congo DR": "刚果（金）"
+};
+
+const CLUB_ZH = {
+  "Al Nassr": "利雅得胜利",
+  "Manchester City": "曼城",
+  "Manchester United": "曼联",
+  Liverpool: "利物浦",
+  Arsenal: "阿森纳",
+  Chelsea: "切尔西",
+  Tottenham: "托特纳姆热刺",
+  "Paris Saint-Germain": "巴黎圣日耳曼",
+  "Real Madrid": "皇家马德里",
+  Barcelona: "巴塞罗那",
+  "Atletico Madrid": "马德里竞技",
+  Bayern: "拜仁慕尼黑",
+  "Bayern Munich": "拜仁慕尼黑",
+  Benfica: "本菲卡",
+  "FC Porto": "波尔图",
+  Porto: "波尔图",
+  "Sporting CP": "葡萄牙体育",
+  "AC Milan": "AC米兰",
+  Internazionale: "国际米兰",
+  Juventus: "尤文图斯",
+  Wolves: "狼队",
+  "Wolverhampton Wanderers": "狼队",
+  "Nottingham Forest": "诺丁汉森林",
+  "Al Hilal": "利雅得新月",
+  "Al Ittihad": "吉达联合",
+  "Al Ahli": "吉达国民",
+  Fenerbahce: "费内巴切",
+  Villarreal: "比利亚雷亚尔",
+  Mallorca: "马略卡",
+  "Real Sociedad": "皇家社会"
+};
+
+function translatePosition(position) {
+  return POSITION_ZH[position] || position || "-";
+}
+
+function translateCountry(country) {
+  return COUNTRY_ZH[country] || country || "-";
+}
+
+function translateClub(club) {
+  if (!club) return "";
+  return CLUB_ZH[club] || `${club}（中文名待校验）`;
+}
+
+function heightToCm(height) {
+  const match = String(height || "").match(/(\d+)'\s*(\d+)?/);
+  if (!match) return "";
+  const feet = Number(match[1]);
+  const inches = Number(match[2] || 0);
+  return `${Math.round((feet * 12 + inches) * 2.54)} cm`;
+}
+
+function weightToKg(weight) {
+  const match = String(weight || "").match(/(\d+)/);
+  if (!match) return "";
+  return `${Math.round(Number(match[1]) * 0.453592)} kg`;
+}
+
+function positionFromTitle(title) {
+  return Object.keys(POSITION_ZH).find((position) => title.endsWith(` ${position}`)) || "";
+}
+
+function parsePlayerProfileHtml(html) {
+  const title = decodeHtml(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "");
+  const cleanTitle = title.replace(/\s+-\s+ESPN\s*$/i, "");
+  const parts = cleanTitle.split(" - ");
+  let club = "";
+  let position = "";
+  if (parts.length >= 2) {
+    const clubAndPosition = parts[1];
+    position = positionFromTitle(clubAndPosition);
+    club = position ? clubAndPosition.slice(0, -position.length).trim() : clubAndPosition.trim();
+  }
+  const clubLink = html.match(/PlayerHeader__Team_Info[\s\S]*?<a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+  if (clubLink) {
+    club = stripTags(clubLink[2]) || club;
+  }
+  return {
+    club,
+    clubZh: translateClub(club),
+    positionName: position,
+    positionZh: translatePosition(position)
+  };
+}
+
+async function fetchPlayerProfile(player) {
+  if (!player.href || !isAllowedPlayerUrl(player.href)) return {};
+  const file = playerCachePath(player.href);
+  if (isFresh(file, PLAYER_TTL_MS)) {
+    const cached = JSON.parse(fs.readFileSync(file, "utf8"));
+    cached.clubZh = translateClub(cached.club);
+    return cached;
+  }
+  const response = await fetch(player.href, {
+    headers: { "user-agent": "football-analysis-agent/0.1" }
+  });
+  if (!response.ok) throw new Error(`ESPN player HTTP ${response.status}`);
+  const profile = {
+    ...parsePlayerProfileHtml(await response.text()),
+    source: player.href,
+    fetchedAt: new Date().toISOString()
+  };
+  fs.writeFileSync(file, JSON.stringify(profile, null, 2));
+  return profile;
+}
+
+async function mapLimit(items, limit, mapper) {
+  const results = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next;
+      next += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+async function enrichPlayers(players) {
+  const profiles = await mapLimit(players, 4, async (player) => {
+    try {
+      return await fetchPlayerProfile(player);
+    } catch {
+      return {};
+    }
+  });
+  return players.map((player, index) => ({
+    ...player,
+    positionZh: translatePosition(player.position),
+    heightCm: heightToCm(player.height),
+    weightKg: weightToKg(player.weight),
+    nationalityZh: translateCountry(player.nationality),
+    club: profiles[index]?.club || "",
+    clubZh: profiles[index]?.clubZh || "",
+    profileSource: profiles[index]?.source || ""
+  }));
 }
 
 function parseSquadHtml(html) {
@@ -229,11 +424,87 @@ async function fetchSquad(team) {
   });
   if (!response.ok) throw new Error(`ESPN squad HTTP ${response.status}`);
   const html = await response.text();
-  const players = parseSquadHtml(html);
+  const players = await enrichPlayers(parseSquadHtml(html));
   return {
     players,
     source: link,
     warning: players.length ? "" : "已访问 squad 页面，但没有解析到球员表。"
+  };
+}
+
+function readModelConfig() {
+  if (fs.existsSync(MODEL_CONFIG)) return JSON.parse(fs.readFileSync(MODEL_CONFIG, "utf8"));
+  return {};
+}
+
+function writeModelConfig(config) {
+  fs.writeFileSync(MODEL_CONFIG, JSON.stringify(config, null, 2));
+  return config;
+}
+
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = "";
+    req.on("data", (chunk) => {
+      body += chunk;
+      if (body.length > 2_000_000) {
+        req.destroy();
+        reject(new Error("Request body too large"));
+      }
+    });
+    req.on("end", () => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch {
+        reject(new Error("Invalid JSON body"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function buildEvaluationPrompt(match, config) {
+  return [
+    "你是赛前足球分析智能体，只分析适合分析的比赛，不强行预测精确比分。",
+    "重点判断上半场和全场大致走势，必须说明不确定性、过滤理由、信息缺口和可靠来源。",
+    "分析优先级：教练策略与执行风格、战术对位、球员实力边界、首发/伤停/轮换、赛程动机、市场校验、不可预测事件。",
+    "前置纪律：实力断层局、资料不足局、市场过热且战术证据不足时，应降级或跳过。",
+    `当前配置：${JSON.stringify(config)}`,
+    `比赛输入：${JSON.stringify(match)}`
+  ].join("\n\n");
+}
+
+async function evaluateWithModel(match, config) {
+  const prompt = buildEvaluationPrompt(match, config);
+  if (!process.env.LLM_API_URL || !process.env.LLM_API_KEY || !process.env.LLM_MODEL) {
+    return {
+      ok: false,
+      mode: "prompt-only",
+      warning: "未配置 LLM_API_URL / LLM_API_KEY / LLM_MODEL，已返回可直接发送给大模型的输入包。",
+      prompt
+    };
+  }
+
+  const response = await fetch(process.env.LLM_API_URL, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${process.env.LLM_API_KEY}`
+    },
+    body: JSON.stringify({
+      model: process.env.LLM_MODEL,
+      messages: [
+        { role: "system", content: "你是严谨的足球赛前分析师，禁止承诺稳定盈利。" },
+        { role: "user", content: prompt }
+      ],
+      temperature: Number(config.model?.temperature ?? 0.2)
+    })
+  });
+  if (!response.ok) throw new Error(`LLM HTTP ${response.status}`);
+  return {
+    ok: true,
+    mode: "llm",
+    result: await response.json()
   };
 }
 
@@ -254,7 +525,14 @@ async function getTeamDetail(teamName) {
   }
 
   if (isFresh(cacheFile, SQUAD_TTL_MS)) {
-    return JSON.parse(fs.readFileSync(cacheFile, "utf8"));
+    const cached = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
+    const needsPlayerRefresh = cached.players?.some((player) => !player.heightCm || player.clubZh?.includes("待校验"));
+    if (needsPlayerRefresh) {
+      cached.players = await enrichPlayers(cached.players);
+      cached.fetchedAt = new Date().toISOString();
+      fs.writeFileSync(cacheFile, JSON.stringify(cached, null, 2));
+    }
+    return cached;
   }
 
   try {
@@ -362,6 +640,17 @@ async function handleApi(req, res, url) {
     const team = url.searchParams.get("team");
     if (!team) return jsonResponse(res, 400, { error: "Missing team=" });
     return jsonResponse(res, 200, await getTeamDetail(team));
+  }
+
+  if (url.pathname === "/api/model-config") {
+    if (req.method === "GET") return jsonResponse(res, 200, readModelConfig());
+    if (req.method === "POST") return jsonResponse(res, 200, writeModelConfig(await readRequestBody(req)));
+  }
+
+  if (url.pathname === "/api/model-evaluate") {
+    if (req.method !== "POST") return jsonResponse(res, 405, { error: "POST required" });
+    const body = await readRequestBody(req);
+    return jsonResponse(res, 200, await evaluateWithModel(body.match, readModelConfig()));
   }
 
   if (url.pathname === "/api/sync-now") {
