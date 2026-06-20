@@ -185,28 +185,7 @@ const logPanel = ref(null);
 const chartEl = ref(null);
 let chart;
 
-const sourceNeeds = [
-  {
-    title: "The Guardian 比赛直播记录",
-    description: "用于还原首轮真实比赛进程、关键时间点、压迫阶段、换人后变化。当前系统未接入 Guardian 抓取。"
-  },
-  {
-    title: "The Analyst / Opta 数据文章",
-    description: "用于 xG、每脚射门平均 xG、射门质量、禁区触球和机会质量判断。当前只接入 ESPN 基础赛程/名单。"
-  },
-  {
-    title: "FIFA 官方技术统计",
-    description: "用于官方事件、技术报告、球队阶段性表现。需要接入 FIFA match centre 或技术统计源。"
-  },
-  {
-    title: "全场录像观察",
-    description: "用于验证高压触发点、出球路线、定位球质量、下半场体能衰减。当前没有视频分析模块。"
-  },
-  {
-    title: "懂球帝 / 小红书",
-    description: "这些 App 有中文球员信息，但当前项目没有登录态、Cookie 或稳定结构化接口；可作为中文译名和线索层，不应单独作为事实层。"
-  }
-];
+const sourceNeeds = ref([]);
 
 const matchOptions = computed(() => matches.value.map((match) => ({
   label: `${match.kickoffTime} · ${match.home} vs ${match.away}`,
@@ -302,6 +281,16 @@ async function loadMatches() {
     .map((match) => ({ ...match, key: match.key || matchKey(match) }))
     .sort((a, b) => a.kickoffTime.localeCompare(b.kickoffTime));
   selectedMatchKey.value = matches.value[0]?.key || "";
+}
+
+async function loadDataSources() {
+  const response = await fetch("/api/data-sources");
+  if (!response.ok) return;
+  const payload = await response.json();
+  sourceNeeds.value = (payload.stableEntrances || []).map((source) => ({
+    title: source.name,
+    description: `${source.tier} · ${source.url}${source.note ? ` · ${source.note}` : ""}`
+  }));
 }
 
 function shiftDate(days) {
@@ -464,6 +453,7 @@ loadMatches().catch((error) => {
   log(`赛程同步失败：${error.message}`);
   message.error(error.message);
 });
+loadDataSources().catch(() => {});
 </script>
 
 <style scoped>

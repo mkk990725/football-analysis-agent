@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "updatedAt": "2026-06-20",
+  "sourceTiers": [
+    {
+      "tier": "official_fact",
+      "name": "官方事实层",
+      "useFor": "赛程真实性、首发、伤停、发布会、比赛事件、技术统计",
+      "rule": "模型分析前必须优先校验；缺失时降低可分析度或建议跳过。"
+    },
+    {
+      "tier": "structured_data",
+      "name": "结构化数据层",
+      "useFor": "xG、射门质量、控球推进、球员名单、赛程、赔率/市场变化校验",
+      "rule": "必须注明数据口径和更新时间，不允许把单一数据源当成结论。"
+    },
+    {
+      "tier": "media_live",
+      "name": "媒体直播/复盘层",
+      "useFor": "比赛过程、战术变化、关键阶段、换人前后走势",
+      "rule": "用于还原过程，需要和官方事件或视频观察交叉验证。"
+    },
+    {
+      "tier": "cn_context",
+      "name": "中文资料/舆情辅助层",
+      "useFor": "中文名、球员常用称呼、球迷观察、线索发现",
+      "rule": "不能单独作为事实依据，必须回到官方或结构化来源确认。"
+    }
+  ],
+  "stableEntrances": [
+    {
+      "id": "guardian-football-minute-by-minute",
+      "name": "The Guardian football minute-by-minute / live",
+      "tier": "media_live",
+      "url": "https://www.theguardian.com/football/football%2Btone/minutebyminute"
+    },
+    {
+      "id": "guardian-live-football-scores",
+      "name": "The Guardian live football scores",
+      "tier": "media_live",
+      "url": "https://www.theguardian.com/football/live"
+    },
+    {
+      "id": "guardian-minute-by-minute",
+      "name": "The Guardian minute-by-minute 总入口",
+      "tier": "media_live",
+      "url": "https://www.theguardian.com/tone/minutebyminute"
+    },
+    {
+      "id": "theanalyst-home",
+      "name": "The Analyst / Opta 首页",
+      "tier": "structured_data",
+      "url": "https://theanalyst.com/"
+    },
+    {
+      "id": "theanalyst-world-cup-predictions",
+      "name": "The Analyst / Opta FIFA World Cup predictions",
+      "tier": "structured_data",
+      "url": "https://theanalyst.com/competition/fifa-world-cup/predictions"
+    },
+    {
+      "id": "theanalyst-football-predictions",
+      "name": "The Analyst / Opta football predictions",
+      "tier": "structured_data",
+      "url": "https://theanalyst.com/articles/opta-football-predictions"
+    },
+    {
+      "id": "dongqiudi-world-cup-table",
+      "name": "懂球帝世界杯积分榜",
+      "tier": "cn_context",
+      "url": "https://m.dongqiudi.com/stat/9/rankingTeam"
+    },
+    {
+      "id": "dongqiudi-data",
+      "name": "懂球帝数据入口",
+      "tier": "cn_context",
+      "url": "https://m.dongqiudi.com/stat"
+    },
+    {
+      "id": "dongqiudi-team-example",
+      "name": "懂球帝球队页示例",
+      "tier": "cn_context",
+      "url": "https://www.dongqiudi.com/team/50000330.html"
+    },
+    {
+      "id": "xiaohongshu-explore",
+      "name": "小红书入口",
+      "tier": "cn_context",
+      "url": "https://www.xiaohongshu.com/explore",
+      "note": "动态页，不保证每次都能直接抓到单场内容；只作为中文称呼和线索来源。"
+    },
+    {
+      "id": "fifa-match-centre",
+      "name": "FIFA Match Centre",
+      "tier": "official_fact",
+      "url": "https://www.fifa.com/en/match-centre"
+    },
+    {
+      "id": "fifa-live",
+      "name": "FIFA Live",
+      "tier": "official_fact",
+      "url": "https://www.fifa.com/live"
+    },
+    {
+      "id": "fifa-2026-fixtures",
+      "name": "FIFA 2026 World Cup 官方赛程/赛果",
+      "tier": "official_fact",
+      "url": "https://www.fifa.com/en/tournaments/mens/worldcup/canadamexicousa2026/articles/match-schedule-fixtures-results-teams-stadiums"
+    }
+  ],
+  "searchTemplates": [
+    {
+      "id": "guardian-single-live",
+      "name": "Guardian 单场直播记录",
+      "tier": "media_live",
+      "query": "site:theguardian.com/football/live \"{teamA}\" \"{teamB}\" \"World Cup 2026\" \"as it happened\""
+    },
+    {
+      "id": "opta-single-analysis",
+      "name": "Opta / The Analyst 单场分析",
+      "tier": "structured_data",
+      "query": "site:theanalyst.com \"{teamA}\" \"{teamB}\" \"World Cup\""
+    },
+    {
+      "id": "fifa-match-centre-single",
+      "name": "FIFA 单场 Match Centre",
+      "tier": "official_fact",
+      "query": "site:fifa.com/en/match-centre \"{teamA}\" \"{teamB}\""
+    },
+    {
+      "id": "official-starting-xi-x",
+      "name": "官方首发 X/Twitter",
+      "tier": "official_fact",
+      "query": "site:x.com \"Starting XI\" \"{team}\""
+    },
+    {
+      "id": "official-starting-xi-instagram",
+      "name": "官方首发 Instagram",
+      "tier": "official_fact",
+      "query": "site:instagram.com \"Starting XI\" \"{team}\""
+    },
+    {
+      "id": "official-starting-xi-fa-domain",
+      "name": "官方足协首发",
+      "tier": "official_fact",
+      "query": "site:{officialFaDomain} \"Starting XI\" \"{team}\""
+    },
+    {
+      "id": "official-injury-update",
+      "name": "官方伤停更新",
+      "tier": "official_fact",
+      "query": "site:{officialFaDomain} \"injury update\" \"{team}\""
+    },
+    {
+      "id": "official-press-conference",
+      "name": "官方发布会",
+      "tier": "official_fact",
+      "query": "site:{officialFaDomain} \"press conference\" \"{team}\""
+    },
+    {
+      "id": "youtube-press-conference",
+      "name": "YouTube 发布会",
+      "tier": "media_live",
+      "query": "site:youtube.com \"press conference\" \"{team}\" \"World Cup\""
+    }
+  ],
+  "officialFaDomains": {
+    "土耳其": "tff.org",
+    "Türkiye": "tff.org",
+    "Turkey": "tff.org",
+    "乌拉圭": "auf.org.uy",
+    "Uruguay": "auf.org.uy"
+  },
+  "teamSearchAliases": {
+    "土耳其": {
+      "international": "Turkey",
+      "local": "Türkiye",
+      "zh": "土耳其"
+    },
+    "Türkiye": {
+      "international": "Turkey",
+      "local": "Türkiye",
+      "zh": "土耳其"
+    },
+    "Turkey": {
+      "international": "Turkey",
+      "local": "Türkiye",
+      "zh": "土耳其"
+    },
+    "乌拉圭": {
+      "international": "Uruguay",
+      "local": "Uruguay",
+      "zh": "乌拉圭"
+    },
+    "Uruguay": {
+      "international": "Uruguay",
+      "local": "Uruguay",
+      "zh": "乌拉圭"
+    }
+  }
+}

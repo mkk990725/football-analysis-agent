@@ -14,6 +14,7 @@ const TRANSLATION_CACHE = path.join(CACHE_DIR, "player-name-translations.json");
 const TEAM_CACHE = path.join(CACHE_DIR, "teams.json");
 const MODEL_CONFIG = path.join(__dirname, "model-config.json");
 const MODEL_CONFIG_EXAMPLE = path.join(__dirname, "model-config.example.json");
+const SOURCE_REGISTRY = path.join(__dirname, "source-registry.json");
 const DB_FILE = path.join(__dirname, "football-agent.db");
 const PREMATCH_SKILL = path.join(__dirname, "agent-skills", "prematch-analysis.md");
 const LEARNING_SKILL = path.join(__dirname, "agent-skills", "learning-failures.md");
@@ -333,6 +334,89 @@ function zhName(name) {
 
 function squadLink(team) {
   return team?.links?.find((link) => link.rel?.includes("squad"))?.href || "";
+}
+
+function readSourceRegistry() {
+  if (!fs.existsSync(SOURCE_REGISTRY)) {
+    return { version: 0, stableEntrances: [], searchTemplates: [], officialFaDomains: {} };
+  }
+  return JSON.parse(fs.readFileSync(SOURCE_REGISTRY, "utf8"));
+}
+
+function normalizeTeamName(name) {
+  return String(name || "")
+    .trim()
+    .replace(/^Türkiye$/i, "土耳其")
+    .replace(/^Turkey$/i, "土耳其")
+    .replace(/^Uruguay$/i, "乌拉圭")
+    .toLowerCase();
+}
+
+function renderSourceQuery(template, values) {
+  return template
+    .replaceAll("{teamA}", values.teamA)
+    .replaceAll("{teamB}", values.teamB)
+    .replaceAll("{team}", values.team)
+    .replaceAll("{officialFaDomain}", values.officialFaDomain || "官方足协域名");
+}
+
+async function sourceCheckForMatch(matchLike) {
+  const registry = readSourceRegistry();
+  const teamA = matchLike?.home || matchLike?.teamA || matchLike?.homeTeam || "";
+  const teamB = matchLike?.away || matchLike?.teamB || matchLike?.awayTeam || "";
+  const aliases = registry.teamSearchAliases || {};
+  const teamAForGlobalSearch = aliases[teamA]?.international || teamA;
+  const teamBForGlobalSearch = aliases[teamB]?.international || teamB;
+  const start = matchLike?.start || "2026-06-11";
+  const end = matchLike?.end || "2026-07-19";
+  const matches = await getMatchesForBeijingRange(start, end);
+  const wanted = [normalizeTeamName(teamA), normalizeTeamName(teamB)].sort().join("|");
+  const fixture = matches.find((match) => (
+    [normalizeTeamName(match.home), normalizeTeamName(match.away)].sort().join("|") === wanted
+  )) || null;
+  const officialFaDomains = registry.officialFaDomains || {};
+  const teams = [teamA, teamB].filter(Boolean);
+  const searchQueries = [];
+
+  for (const template of registry.searchTemplates || []) {
+    if (template.query.includes("{teamA}") || template.query.includes("{teamB}")) {
+      searchQueries.push({
+        id: template.id,
+        name: template.name,
+        tier: template.tier,
+        query: renderSourceQuery(template.query, { teamA: teamAForGlobalSearch, teamB: teamBForGlobalSearch, team: teamAForGlobalSearch })
+      });
+      continue;
+    }
+    for (const team of teams) {
+      const alias = aliases[team] || {};
+      const queryTeam = template.id.includes("fa-domain") || template.id.includes("injury") || template.id.includes("press")
+        ? (alias.international || team)
+        : (alias.international || team);
+      searchQueries.push({
+        id: `${template.id}-${team}`,
+        name: `${template.name}：${team}`,
+        tier: template.tier,
+        query: renderSourceQuery(template.query, {
+          teamA,
+          teamB,
+          team: queryTeam,
+          officialFaDomain: officialFaDomains[team] || officialFaDomains[teamA] || officialFaDomains[teamB] || ""
+        })
+      });
+    }
+  }
+
+  return {
+    checkedAt: new Date().toISOString(),
+    requestedMatch: { teamA, teamB, start, end },
+    fixtureConfirmed: Boolean(fixture),
+    fixture,
+    gate: fixture ? "可继续补充信息源" : "赛程真实性未确认，不能进入预测，只能做资料准备",
+    stableEntrances: registry.stableEntrances || [],
+    searchQueries,
+    sourceTiers: registry.sourceTiers || []
+  };
 }
 
 function eventToMatch(event) {
@@ -920,9 +1004,11 @@ function compactTeamDetail(detail) {
 async function buildAnalysisInput(match) {
   const teams = [match?.home, match?.away].filter(Boolean);
   const teamDetails = await Promise.all(teams.map(async (team) => compactTeamDetail(await getTeamDetail(team))));
+  const sourceCheck = await sourceCheckForMatch(match);
   return {
     match,
     teams: teamDetails,
+    sourceCheck,
     generatedAt: new Date().toISOString()
   };
 }
@@ -1157,9 +1243,22 @@ async function handleApi(req, res, url) {
       ok: true,
       pollMinutes: POLL_MINUTES,
       cacheDir: CACHE_DIR,
-      sources: ["ESPN scoreboard allowlist", "ESPN squad allowlist"],
+      sources: readSourceRegistry().stableEntrances,
       note: "This service polls safe allowlisted data sources. Prediction runs only after API URL, API key, and model name are configured."
     });
+  }
+
+  if (url.pathname === "/api/data-sources") {
+    return jsonResponse(res, 200, readSourceRegistry());
+  }
+
+  if (url.pathname === "/api/source-check") {
+    const teamA = url.searchParams.get("teamA") || url.searchParams.get("home") || "";
+    const teamB = url.searchParams.get("teamB") || url.searchParams.get("away") || "";
+    const start = url.searchParams.get("start") || "2026-06-11";
+    const end = url.searchParams.get("end") || "2026-07-19";
+    if (!teamA || !teamB) return jsonResponse(res, 400, { error: "Missing teamA/teamB" });
+    return jsonResponse(res, 200, await sourceCheckForMatch({ teamA, teamB, start, end }));
   }
 
   if (url.pathname === "/api/scoreboard") {
