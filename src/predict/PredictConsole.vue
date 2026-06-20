@@ -36,7 +36,7 @@
                         v-model:formatted-value="selectedDate"
                         value-format="yyyy-MM-dd"
                         type="date"
-                        clearable
+                        :clearable="false"
                         class="date-picker"
                         @update:formatted-value="loadMatches"
                       />
@@ -142,10 +142,14 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref } from "vue";
-import { darkTheme, useMessage } from "naive-ui";
+import { createDiscreteApi, darkTheme } from "naive-ui";
 import * as echarts from "echarts";
 
-const message = useMessage();
+const { message } = createDiscreteApi(["message"], {
+  configProviderProps: {
+    theme: darkTheme
+  }
+});
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
 const steps = ["①连接知识库", "②检索信息", "③推理分析", "④生成回复"];
 const sourceGapFallback = "需要补 Guardian 直播记录、The Analyst/Opta 文章、FIFA 技术统计和全场录像观察。";
@@ -289,21 +293,14 @@ function eventToMatch(event) {
   return { ...match, key: matchKey(match) };
 }
 
-async function fetchScoreboard(dateKey) {
-  const response = await fetch(`/api/scoreboard?dates=${dateKey}`);
-  if (!response.ok) throw new Error(`赛程接口 HTTP ${response.status}`);
-  return response.json();
-}
-
 async function loadMatches() {
-  const keys = dateRangeKeys(addDays(selectedDate.value, -1), addDays(selectedDate.value, 1));
-  const payloads = await Promise.all(keys.map(fetchScoreboard));
-  const byKey = new Map();
-  payloads.flatMap((payload) => payload.events || [])
-    .map(eventToMatch)
-    .filter((match) => match.date === selectedDate.value)
-    .forEach((match) => byKey.set(match.key, match));
-  matches.value = [...byKey.values()].sort((a, b) => a.kickoffTime.localeCompare(b.kickoffTime));
+  if (!selectedDate.value) return;
+  const response = await fetch(`/api/matches?start=${selectedDate.value}&end=${selectedDate.value}`);
+  if (!response.ok) throw new Error(`赛程接口 HTTP ${response.status}`);
+  const payload = await response.json();
+  matches.value = (payload.matches || [])
+    .map((match) => ({ ...match, key: match.key || matchKey(match) }))
+    .sort((a, b) => a.kickoffTime.localeCompare(b.kickoffTime));
   selectedMatchKey.value = matches.value[0]?.key || "";
 }
 
