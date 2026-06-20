@@ -1,4 +1,5 @@
 const matchSelect = document.getElementById("teamMatchSelect");
+let allMatches = [];
 
 function getQuery(name) {
   return new URLSearchParams(window.location.search).get(name);
@@ -10,26 +11,52 @@ function todayIso() {
 
 function defaultMatch() {
   const matchId = getQuery("match") || localStorage.getItem("selectedMatchId");
-  const fromQuery = window.WORLD_CUP_FIXTURES.find((match) => match.id === matchId);
+  const fromQuery = allMatches.find((match) => match.id === matchId);
   if (fromQuery) return fromQuery;
   const today = todayIso();
-  return window.WORLD_CUP_FIXTURES
+  return allMatches
     .filter((match) => match.date >= today)
     .sort((a, b) => a.date.localeCompare(b.date) || (a.kickoffTime || "").localeCompare(b.kickoffTime || ""))[0]
     || window.WORLD_CUP_FIXTURES[0];
 }
 
 function getMatch() {
-  return window.WORLD_CUP_FIXTURES.find((match) => match.id === matchSelect.value) || defaultMatch();
+  return allMatches.find((match) => match.id === matchSelect.value) || defaultMatch();
 }
 
 function renderMatchSelect(selectedId) {
-  const matches = [...window.WORLD_CUP_FIXTURES]
+  const matches = [...allMatches]
     .sort((a, b) => a.date.localeCompare(b.date) || (a.kickoffTime || "").localeCompare(b.kickoffTime || ""));
   matchSelect.innerHTML = matches
     .map((match) => `<option value="${escapeHtml(match.id)}">${escapeHtml(match.date)} · ${escapeHtml(match.home)} vs ${escapeHtml(match.away)}</option>`)
     .join("");
   matchSelect.value = selectedId;
+}
+
+function matchKey(match) {
+  const teams = [match.home, match.away].map((team) => String(team || "").trim()).sort((a, b) => a.localeCompare(b, "zh-CN"));
+  return `${match.date}|${teams[0]}|${teams[1]}`;
+}
+
+async function loadAllMatches() {
+  if (!window.location.protocol.startsWith("http")) {
+    allMatches = [...window.WORLD_CUP_FIXTURES];
+    return;
+  }
+  try {
+    const response = await fetch("/api/matches?start=2026-06-11&end=2026-06-27");
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const merged = new Map();
+    [...(payload.matches || []), ...window.WORLD_CUP_FIXTURES].forEach((match) => {
+      if (!match?.home || !match?.away) return;
+      const key = matchKey(match);
+      if (!merged.has(key) || String(match.id).startsWith("espn-")) merged.set(key, match);
+    });
+    allMatches = [...merged.values()];
+  } catch {
+    allMatches = [...window.WORLD_CUP_FIXTURES];
+  }
 }
 
 function escapeHtml(value = "") {
@@ -192,7 +219,9 @@ async function renderDetail() {
   grid.innerHTML = teams.map((team, index) => renderTeamCard(team, details[index])).join("");
 }
 
-const initial = defaultMatch();
-renderMatchSelect(initial.id);
 matchSelect.addEventListener("change", renderDetail);
-renderDetail();
+loadAllMatches().then(() => {
+  const initial = defaultMatch();
+  renderMatchSelect(initial.id);
+  renderDetail();
+});

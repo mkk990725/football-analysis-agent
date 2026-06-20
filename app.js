@@ -607,6 +607,10 @@ function renderPredictionSummary(prediction) {
       <p>${valueText(summary.key_evidence || summary.evidence)}</p>
     </div>
     <div class="prediction-section">
+      <h3>球队数据校验</h3>
+      <p>${valueText(summary.team_data_check, "模型未单独给出球队数据校验。")}</p>
+    </div>
+    <div class="prediction-section">
       <h3>娱乐参考前三项</h3>
       ${renderEntertainmentTop3(summary.entertainment_top3 || summary.entertainmentTop3)}
     </div>

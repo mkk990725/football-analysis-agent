@@ -45,6 +45,20 @@
         font-weight: 900;
         letter-spacing: 0;
         color: #fff;
+        text-decoration: none;
+      }
+
+      .nav-actions {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+      }
+
+      .back-home {
+        color: var(--accent);
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 800;
       }
 
       .status-indicator {
@@ -113,9 +127,15 @@
 
       .selector-grid {
         display: grid;
-        grid-template-columns: 180px minmax(260px, 1fr);
+        grid-template-columns: 260px minmax(260px, 1fr);
         gap: 14px;
         margin-bottom: 24px;
+      }
+
+      .date-row {
+        display: grid;
+        grid-template-columns: 42px minmax(0, 1fr) 42px;
+        gap: 8px;
       }
 
       label span {
@@ -154,6 +174,16 @@
         font-weight: 950;
         cursor: pointer;
         box-shadow: 0 16px 36px rgba(56, 189, 248, 0.32);
+      }
+
+      .secondary-button {
+        padding: 12px 16px;
+        border: 1px solid rgba(56, 189, 248, 0.38);
+        border-radius: 12px;
+        color: #e0f2fe;
+        background: rgba(56, 189, 248, 0.12);
+        font-weight: 900;
+        cursor: pointer;
       }
 
       #startButton:disabled {
@@ -251,6 +281,13 @@
         line-height: 1.65;
       }
 
+      .source-gap-list {
+        margin: 0;
+        padding-left: 18px;
+        color: #cbd5e1;
+        line-height: 1.7;
+      }
+
       .hidden { display: none; }
 
       @media (max-width: 860px) {
@@ -265,8 +302,11 @@
   </head>
   <body>
     <nav class="Navbar">
-      <div class="logo">智能体工作台</div>
-      <div class="status-indicator"><span class="status-dot"></span>运行中</div>
+      <a class="logo" href="index.html">智能体工作台</a>
+      <div class="nav-actions">
+        <a class="back-home" href="index.html">返回主界面</a>
+        <div class="status-indicator"><span class="status-dot"></span>运行中</div>
+      </div>
     </nav>
 
     <div class="layout">
@@ -281,7 +321,11 @@
           <div class="selector-grid">
             <label>
               <span>比赛日期</span>
-              <input id="matchDate" type="date" value="2026-06-18" />
+              <div class="date-row">
+                <button class="secondary-button" id="prevDate" type="button">‹</button>
+                <input id="matchDate" type="date" value="2026-06-18" />
+                <button class="secondary-button" id="nextDate" type="button">›</button>
+              </div>
             </label>
             <label>
               <span>比赛</span>
@@ -291,6 +335,7 @@
 
           <div class="primary-zone">
             <button id="startButton" type="button">开始处理</button>
+            <button id="codexButton" class="secondary-button" type="button">使用 Codex 大脑</button>
           </div>
 
           <div class="Stepper" id="Stepper">
@@ -322,6 +367,9 @@
       const matchDate = document.getElementById("matchDate");
       const matchSelect = document.getElementById("matchSelect");
       const startButton = document.getElementById("startButton");
+      const codexButton = document.getElementById("codexButton");
+      const prevDate = document.getElementById("prevDate");
+      const nextDate = document.getElementById("nextDate");
       const logArea = document.getElementById("LogArea");
       const resultPanel = document.getElementById("resultPanel");
       const steps = [...document.querySelectorAll(".Step")];
@@ -357,6 +405,11 @@
         const date = new Date(`${isoDate}T00:00:00Z`);
         date.setUTCDate(date.getUTCDate() + days);
         return date.toISOString().slice(0, 10);
+      }
+
+      function shiftSelectedDate(days) {
+        matchDate.value = addDays(matchDate.value, days);
+        loadMatches().catch((error) => log(`赛程同步失败：${error.message}`));
       }
 
       function dateRangeKeys(start, end) {
@@ -489,7 +542,29 @@
           <div class="analysis-block"><h3>上半场可能走势</h3><p>${valueText(prediction.first_half || prediction.firstHalf)}</p></div>
           <div class="analysis-block"><h3>全场可能走势</h3><p>${valueText(prediction.full_time || prediction.fullTime)}</p></div>
           <div class="analysis-block"><h3>关键依据</h3><p>${valueText(prediction.key_evidence || prediction.evidence)}</p></div>
+          <div class="analysis-block"><h3>球队数据校验</h3><p>${valueText(prediction.team_data_check, "模型未单独给出球队数据校验。")}</p></div>
+          <div class="analysis-block"><h3>信息源缺口</h3><p>${valueText(prediction.information_gaps || prediction.missing_sources, "需要补 Guardian 直播记录、Opta/The Analyst 文章、FIFA 技术统计和全场录像观察。")}</p></div>
           <div class="analysis-block"><h3>娱乐参考前三项</h3>${renderTop3(prediction.entertainment_top3 || prediction.entertainmentTop3)}</div>
+        `;
+      }
+
+      function renderSourceNeeds(packageData) {
+        resultPanel.classList.remove("hidden");
+        resultPanel.innerHTML = `
+          <div class="analysis-block">
+            <h3>Codex 分析包已生成</h3>
+            <p>${packageData.note}</p>
+          </div>
+          <div class="analysis-block">
+            <h3>当前缺失的高价值信息源</h3>
+            <ul class="source-gap-list">
+              ${packageData.missingSources.map((item) => `<li>${item}</li>`).join("")}
+            </ul>
+          </div>
+          <div class="analysis-block">
+            <h3>可发送给 Codex 的分析输入</h3>
+            <p>${packageData.prompt}</p>
+          </div>
         `;
       }
 
@@ -534,8 +609,28 @@
         }
       }
 
+      async function runCodexPackage() {
+        const match = selectedMatch();
+        if (!match) return;
+        log("正在生成 Codex 分析包...");
+        const response = await fetch("/api/codex-analysis-package", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ match })
+        });
+        if (!response.ok) {
+          log(`Codex 分析包生成失败：HTTP ${response.status}`);
+          return;
+        }
+        renderSourceNeeds(await response.json());
+        log("Codex 分析包已生成。");
+      }
+
       matchDate.addEventListener("change", loadMatches);
+      prevDate.addEventListener("click", () => shiftSelectedDate(-1));
+      nextDate.addEventListener("click", () => shiftSelectedDate(1));
       startButton.addEventListener("click", runTask);
+      codexButton.addEventListener("click", runCodexPackage);
       loadMatches().catch((error) => {
         log(`赛程同步失败：${error.message}`);
         startButton.disabled = true;

@@ -283,6 +283,19 @@ function currentBeijingDate() {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+function beijingDateFromIso(isoDateTime) {
+  if (!isoDateTime) return "";
+  return new Date(new Date(isoDateTime).getTime() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function beijingTimeFromIso(isoDateTime) {
+  if (!isoDateTime) return "时间待确认";
+  const shifted = new Date(new Date(isoDateTime).getTime() + 8 * 60 * 60 * 1000);
+  const hours = String(shifted.getUTCHours()).padStart(2, "0");
+  const minutes = String(shifted.getUTCMinutes()).padStart(2, "0");
+  return `${shifted.toISOString().slice(0, 10)} ${hours}:${minutes} 北京时间`;
+}
+
 function scoreboardUrl(dateKey) {
   if (!/^\d{8}$/.test(dateKey)) throw new Error("Invalid date key");
   return `https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=${dateKey}`;
@@ -320,6 +333,58 @@ function zhName(name) {
 
 function squadLink(team) {
   return team?.links?.find((link) => link.rel?.includes("squad"))?.href || "";
+}
+
+function eventToMatch(event) {
+  const competition = event.competitions?.[0] || {};
+  const competitors = competition.competitors || [];
+  const home = competitors.find((item) => item.homeAway === "home") || competitors[0];
+  const away = competitors.find((item) => item.homeAway === "away") || competitors[1];
+  const status = competition.status?.type || event.status?.type || {};
+  const completed = Boolean(status.completed);
+  const homeName = zhName(home?.team?.displayName);
+  const awayName = zhName(away?.team?.displayName);
+  return {
+    id: `espn-${event.id}`,
+    espnId: event.id,
+    status: completed ? "review" : "synced",
+    date: beijingDateFromIso(event.date),
+    utcDate: event.date?.slice(0, 10) || "",
+    kickoffTime: beijingTimeFromIso(event.date),
+    group: competition.altGameNote?.replace("FIFA World Cup, ", "") || "世界杯",
+    venue: competition.venue?.fullName || competition.venue?.displayName || "待确认球场",
+    home: homeName,
+    away: awayName,
+    score: completed ? `${home?.score ?? 0}-${away?.score ?? 0}` : "未赛",
+    headline: completed ? "已赛比赛，进入复盘样本池。" : "已同步赛程，等待分析。",
+    recommendation: completed ? "赛后复盘" : "待预测"
+  };
+}
+
+function matchIdentity(match) {
+  const teams = [match.home, match.away].map((team) => String(team || "").trim()).sort((a, b) => a.localeCompare(b, "zh-CN"));
+  return `${match.date}|${teams[0]}|${teams[1]}`;
+}
+
+async function getMatchesForBeijingRange(start, end) {
+  const keys = dateRangeKeys(addDays(start, -1), addDays(end, 1));
+  const payloads = await Promise.all(keys.map(async (key) => {
+    try {
+      return await getScoreboard(key);
+    } catch {
+      return readCachedScoreboard(key) || { events: [] };
+    }
+  }));
+  const seenEvents = new Set();
+  const byMatch = new Map();
+  payloads.flatMap((payload) => payload.events || []).forEach((event) => {
+    if (!event?.id || seenEvents.has(event.id)) return;
+    seenEvents.add(event.id);
+    const match = eventToMatch(event);
+    if (match.date < start || match.date > end) return;
+    byMatch.set(matchIdentity(match), match);
+  });
+  return [...byMatch.values()].sort((a, b) => a.date.localeCompare(b.date) || a.kickoffTime.localeCompare(b.kickoffTime));
 }
 
 function squadCachePath(teamName) {
@@ -869,8 +934,10 @@ function buildEvaluationPrompt(analysisInput, config) {
     "大模型负责主要分析与判断；技能只告诉你如何使用数据、如何过滤、如何表达不确定性，不要把技能写成死板打分公式。",
     "必须先做信息源充足性与真实性校验：区分官方事实、结构化数据、媒体报道、舆情线索、模型推断；识别未经交叉验证的伤停、首发、战术烟雾弹和市场噪声。信息源不足时必须降级或跳过。",
     "必须输出：1）是否可分析/是否建议跳过；2）信息源校验；3）上半场走势；4）全场走势边界；5）最关键证据；6）信息缺口；7）来源可靠性；8）不确定性；9）娱乐参考的前三个比分与半全场选项。",
+    "如果信息源不足，必须明确列出缺哪些信息、去哪类来源补：The Guardian 比赛直播记录、The Analyst/Opta 赛前和数据分析文章、FIFA 官方技术统计、全场录像观察、官方首发/伤停/发布会。",
+    "分析球队整体时必须区分控球/推进/射门数量与稳定破门能力。优先检查 xG、每脚射门平均 xG、禁区触球、重大机会、定位球质量、PPDA、推进到三区次数。示例：如果球队首轮每脚射门平均 xG 只有 0.04，应警惕其进攻被射门数量高估。",
     "不要承诺精确比分，不要承诺稳定盈利。娱乐比分和半全场只能标注为娱乐参考，不能作为投资建议。",
-    "建议输出 JSON，字段至少包含 source_check、is_analyzable、filter_reason、first_half、full_time、key_evidence、information_gaps、source_reliability、uncertainty、entertainment_top3。",
+    "建议输出 JSON，字段至少包含 source_check、is_analyzable、filter_reason、first_half、full_time、key_evidence、information_gaps、source_reliability、uncertainty、team_data_check、entertainment_top3。",
     `分析技能：\n${skill}`,
     `当前配置：${JSON.stringify(config)}`,
     `比赛与球队输入：${JSON.stringify(analysisInput)}`
@@ -1102,6 +1169,16 @@ async function handleApi(req, res, url) {
     return jsonResponse(res, 200, payload);
   }
 
+  if (url.pathname === "/api/matches") {
+    const start = url.searchParams.get("start") || "2026-06-11";
+    const end = url.searchParams.get("end") || "2026-06-27";
+    return jsonResponse(res, 200, {
+      start,
+      end,
+      matches: await getMatchesForBeijingRange(start, end)
+    });
+  }
+
   if (url.pathname === "/api/teams") {
     const teams = fs.existsSync(TEAM_CACHE) ? JSON.parse(fs.readFileSync(TEAM_CACHE, "utf8")) : {};
     return jsonResponse(res, 200, {
@@ -1142,6 +1219,25 @@ async function handleApi(req, res, url) {
     if (req.method !== "POST") return jsonResponse(res, 405, { error: "POST required" });
     const body = await readRequestBody(req);
     return jsonResponse(res, 200, await predictMatch(body.match));
+  }
+
+  if (url.pathname === "/api/codex-analysis-package") {
+    if (req.method !== "POST") return jsonResponse(res, 405, { error: "POST required" });
+    const body = await readRequestBody(req);
+    const analysisInput = await buildAnalysisInput(body.match);
+    return jsonResponse(res, 200, {
+      mode: "codex-package",
+      note: "浏览器无法直接调用当前 Codex 对话。这里生成可发送给 Codex 的完整分析包。",
+      missingSources: [
+        "The Guardian 比赛直播记录或赛后 minute-by-minute",
+        "The Analyst / Opta 赛前与赛后数据文章",
+        "FIFA 官方技术统计与 match report",
+        "全场录像观察：高压触发点、出球路线、射门质量、换人后结构变化",
+        "小组赛第一轮真实事件数据：xG、每脚射门平均 xG、禁区触球、定位球、PPDA、推进到三区次数"
+      ],
+      prompt: buildEvaluationPrompt(analysisInput, readModelConfig()),
+      analysisInput
+    });
   }
 
   if (url.pathname === "/api/review-prediction") {
