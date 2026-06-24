@@ -1,5 +1,5 @@
 <template>
-  <n-config-provider :theme="darkTheme">
+  <n-config-provider>
     <n-message-provider>
       <main class="page-shell">
         <header class="navbar">
@@ -144,14 +144,10 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref } from "vue";
-import { createDiscreteApi, darkTheme } from "naive-ui";
+import { createDiscreteApi } from "naive-ui";
 import * as echarts from "echarts";
 
-const { message } = createDiscreteApi(["message"], {
-  configProviderProps: {
-    theme: darkTheme
-  }
-});
+const { message } = createDiscreteApi(["message"]);
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
 const steps = ["①连接知识库", "②检索信息", "③推理分析", "④生成回复"];
 const sourceGapFallback = "需要补 Guardian 直播记录、The Analyst/Opta 文章、FIFA 技术统计和全场录像观察。";
@@ -389,17 +385,17 @@ function renderChart() {
         { name: "赛程", max: 100 },
         { name: "市场", max: 100 }
       ],
-      axisName: { color: "#cbd5e1" },
-      splitLine: { lineStyle: { color: "rgba(148,163,184,.25)" } },
-      splitArea: { areaStyle: { color: ["rgba(56,189,248,.06)", "rgba(15,23,42,.18)"] } },
-      axisLine: { lineStyle: { color: "rgba(148,163,184,.25)" } }
+      axisName: { color: "#6b7688" },
+      splitLine: { lineStyle: { color: "rgba(101,119,143,.22)" } },
+      splitArea: { areaStyle: { color: ["rgba(47,111,236,.06)", "rgba(245,247,251,.75)"] } },
+      axisLine: { lineStyle: { color: "rgba(101,119,143,.22)" } }
     },
     series: [{
       type: "radar",
       data: [{ value: [confidenceNumber(), 62, 58, 55, 45], name: "预测依据强度" }],
-      areaStyle: { color: "rgba(56,189,248,.22)" },
-      lineStyle: { color: "#38bdf8" },
-      itemStyle: { color: "#38bdf8" }
+      areaStyle: { color: "rgba(47,111,236,.18)" },
+      lineStyle: { color: "#2f6fec" },
+      itemStyle: { color: "#2f6fec" }
     }]
   });
 }
@@ -496,41 +492,53 @@ loadDataSources().catch(() => {});
 <style scoped>
 :global(body) {
   margin: 0;
-  background: #0f172a;
-  color: #e5eefb;
+  background: #f5f7fb;
+  color: #172033;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .page-shell {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 20% 10%, rgba(56, 189, 248, 0.22), transparent 28%),
-    radial-gradient(circle at 80% 0%, rgba(14, 165, 233, 0.14), transparent 28%),
-    #0f172a;
+  background: #f5f7fb;
 }
 
 .navbar {
-  height: 68px;
+  height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 28px;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
-  background: rgba(15, 23, 42, 0.82);
-  backdrop-filter: blur(18px);
+  border-bottom: 1px solid #dce4ee;
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .brand,
 .home-link {
-  color: #e5eefb;
+  color: #172033;
   text-decoration: none;
   font-weight: 900;
+}
+
+.brand {
+  letter-spacing: -0.02em;
+}
+
+.home-link {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid #dce4ee;
+  border-radius: 10px;
+  color: #2f6fec;
+  background: #eef4ff;
+  font-size: 13px;
 }
 
 .nav-right {
   display: inline-flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
 .status-dot {
@@ -538,56 +546,57 @@ loadDataSources().catch(() => {});
   height: 10px;
   border-radius: 50%;
   background: #22c55e;
-  box-shadow: 0 0 18px rgba(34, 197, 94, 0.9);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.12);
 }
 
 .status-text {
-  color: #bbf7d0;
+  color: #17803d;
   font-weight: 800;
 }
 
 .layout {
   display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  min-height: calc(100vh - 68px);
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: calc(100vh - 64px);
 }
 
 .sidebar {
-  padding: 22px 14px;
-  border-right: 1px solid rgba(148, 163, 184, 0.24);
-  background: rgba(15, 23, 42, 0.62);
-  backdrop-filter: blur(18px);
+  padding: 20px 16px;
+  border-right: 1px solid #dce4ee;
+  background: rgba(255, 255, 255, 0.96);
 }
 
 .menu-item {
   width: 100%;
-  padding: 12px 14px;
-  margin-bottom: 8px;
-  border: 0;
-  border-radius: 12px;
-  color: #94a3b8;
+  min-height: 40px;
+  padding: 0 12px;
+  margin-bottom: 6px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: #6b7688;
   background: transparent;
   text-align: left;
-  font-weight: 900;
+  font-weight: 800;
   cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
 }
 
 .menu-item.active,
 .menu-item:hover {
-  color: #e5eefb;
-  background: rgba(56, 189, 248, 0.16);
+  color: #2f6fec;
+  border-color: #d6e4ff;
+  background: #eef4ff;
 }
 
 .main-content {
-  padding: 34px;
+  padding: 28px;
 }
 
 .glass-card {
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 12px;
-  background: rgba(15, 23, 42, 0.72);
-  backdrop-filter: blur(18px);
-  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.34);
+  border: 1px solid #dce4ee;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 12px 34px rgba(26, 39, 69, 0.08);
 }
 
 .control-card,
@@ -615,10 +624,10 @@ loadDataSources().catch(() => {});
 
 .native-control {
   min-height: 38px;
-  border: 1px solid rgba(148, 163, 184, 0.34);
-  border-radius: 8px;
-  color: #e5eefb;
-  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid #dce4ee;
+  border-radius: 10px;
+  color: #172033;
+  background: #ffffff;
   padding: 0 12px;
   font: inherit;
   outline: none;
@@ -626,8 +635,8 @@ loadDataSources().catch(() => {});
 
 .native-control:hover,
 .native-control:focus {
-  border-color: rgba(56, 189, 248, 0.82);
-  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.14);
+  border-color: #9ebcff;
+  box-shadow: 0 0 0 3px rgba(47, 111, 236, 0.1);
 }
 
 .match-select {
@@ -635,7 +644,7 @@ loadDataSources().catch(() => {});
 }
 
 .match-select option {
-  color: #0f172a;
+  color: #172033;
   background: #ffffff;
 }
 
@@ -661,25 +670,25 @@ loadDataSources().catch(() => {});
   min-width: 168px;
   min-height: 46px;
   padding: 0 26px;
-  color: #06111f;
-  border-color: rgba(125, 211, 252, 0.92);
-  background: linear-gradient(135deg, #38bdf8, #67e8f9);
-  box-shadow: 0 12px 30px rgba(56, 189, 248, 0.28);
+  color: #ffffff;
+  border-color: #2f6fec;
+  background: linear-gradient(135deg, #2f6fec, #3d7edc);
+  box-shadow: 0 12px 26px rgba(47, 111, 236, 0.2);
 }
 
 .codex-mini-button {
   min-height: 34px;
   padding: 0 12px;
-  color: #bae6fd;
-  border-color: rgba(56, 189, 248, 0.34);
-  background: rgba(15, 23, 42, 0.68);
+  color: #2f6fec;
+  border-color: #d6e4ff;
+  background: #eef4ff;
   font-size: 12px;
 }
 
 .primary-run-button:hover:not(:disabled),
 .codex-mini-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(125, 211, 252, 0.96);
+  border-color: #2f6fec;
 }
 
 .primary-run-button:disabled,
@@ -698,27 +707,27 @@ loadDataSources().catch(() => {});
 
 .step {
   padding: 13px 12px;
-  border: 1px solid rgba(148, 163, 184, 0.24);
+  border: 1px solid #dce4ee;
   border-radius: 12px;
-  color: #64748b;
-  background: rgba(15, 23, 42, 0.56);
+  color: #6b7688;
+  background: #f8fafc;
   text-align: center;
   font-weight: 900;
 }
 
 .step.completed {
-  color: #e0f2fe;
-  border-color: rgba(56, 189, 248, 0.76);
-  background: rgba(56, 189, 248, 0.18);
+  color: #2f6fec;
+  border-color: #b9cef8;
+  background: #eef4ff;
 }
 
 .log-area {
   height: 200px;
   overflow-y: auto;
   padding: 14px;
-  border: 1px solid rgba(56, 189, 248, 0.22);
+  border: 1px solid #dce4ee;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.42);
+  background: #0f172a;
   color: #dbeafe;
   font: 13px/1.7 Consolas, "SFMono-Regular", monospace;
 }
