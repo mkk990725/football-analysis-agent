@@ -849,12 +849,27 @@ function normalizeChatCompletionsUrl(apiUrl = "") {
   }
 }
 
+function isDeepSeekSettings(settings) {
+  const apiUrl = String(settings.apiUrl || "").toLowerCase();
+  const model = String(settings.model || "").toLowerCase();
+  return apiUrl.includes("deepseek.com") || model.includes("deepseek");
+}
+
 async function callChatCompletions(config, messages, temperature = config.model?.temperature ?? 0.2, timeoutMs = 30000) {
   const settings = modelSettings(config);
   if (!settings.apiUrl || !settings.apiKey || !settings.model) {
     throw new Error("缺少 API URL / API Key / 模型名");
   }
   const endpoint = normalizeChatCompletionsUrl(settings.apiUrl);
+  const requestBody = {
+    model: settings.model,
+    messages,
+    temperature: Number(temperature)
+  };
+  if (isDeepSeekSettings(settings)) {
+    requestBody.reasoning_effort = config.model?.reasoningEffort || "high";
+    requestBody.extra_body = config.model?.extraBody || { thinking: { type: "enabled" } };
+  }
   const response = await fetch(endpoint, {
     method: "POST",
     signal: AbortSignal.timeout(timeoutMs),
@@ -862,11 +877,7 @@ async function callChatCompletions(config, messages, temperature = config.model?
       "content-type": "application/json",
       authorization: `Bearer ${settings.apiKey}`
     },
-    body: JSON.stringify({
-      model: settings.model,
-      messages,
-      temperature: Number(temperature)
-    })
+    body: JSON.stringify(requestBody)
   });
   if (!response.ok) {
     const body = await response.text().catch(() => "");
