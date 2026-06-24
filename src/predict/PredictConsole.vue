@@ -517,14 +517,16 @@ loadDataSources().catch(() => {});
   align-items: center;
   justify-content: space-between;
   padding: 0 28px;
-  border-bottom: 1px solid #dce4ee;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.7) inset;
+  border-bottom: 1px solid rgba(39, 50, 70, 0.88);
+  background:
+    linear-gradient(165deg, rgba(15, 21, 30, 0.98) 0%, rgba(8, 11, 17, 1) 100%),
+    radial-gradient(90% 120% at 100% 0%, rgba(98, 167, 255, 0.12), transparent 55%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
 }
 
 .brand,
 .home-link {
-  color: #172033;
+  color: #e8eef8;
   text-decoration: none;
   font-weight: 900;
 }
@@ -539,10 +541,10 @@ loadDataSources().catch(() => {});
   display: inline-flex;
   align-items: center;
   padding: 0 10px;
-  border: 1px solid #dce4ee;
+  border: 1px solid rgba(98, 167, 255, 0.35);
   border-radius: 10px;
-  color: #2f6fec;
-  background: #eef4ff;
+  color: #9ec5ff;
+  background: rgba(98, 167, 255, 0.1);
   font-size: 13px;
 }
 
@@ -573,8 +575,10 @@ loadDataSources().catch(() => {});
 
 .sidebar {
   padding: 20px 16px;
-  border-right: 1px solid #dce4ee;
-  background: rgba(255, 255, 255, 0.96);
+  border-right: 1px solid rgba(39, 50, 70, 0.88);
+  background:
+    linear-gradient(165deg, rgba(15, 21, 30, 0.98) 0%, rgba(8, 11, 17, 1) 52%, #060910 100%),
+    radial-gradient(120% 80% at 0% 0%, rgba(98, 167, 255, 0.1) 0%, transparent 55%);
 }
 
 .menu-item {
@@ -584,7 +588,7 @@ loadDataSources().catch(() => {});
   margin-bottom: 6px;
   border: 1px solid transparent;
   border-radius: 10px;
-  color: #6b7688;
+  color: #8b97ab;
   background: transparent;
   text-align: left;
   font-weight: 800;
@@ -594,9 +598,10 @@ loadDataSources().catch(() => {});
 
 .menu-item.active,
 .menu-item:hover {
-  color: #2f6fec;
-  border-color: #d6e4ff;
-  background: #eef4ff;
+  color: #e8eef8;
+  border-color: rgba(98, 167, 255, 0.35);
+  background: rgba(98, 167, 255, 0.12);
+  box-shadow: inset 3px 0 0 rgba(98, 167, 255, 0.88);
 }
 
 .main-content {
