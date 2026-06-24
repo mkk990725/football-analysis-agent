@@ -644,21 +644,19 @@ function renderMatchList() {
     .map((match) => {
       const active = match.id === state.selectedId ? " active" : "";
       const prediction = predictionFor(match);
-      const evidenceScore = scoreMatchEvidence(match);
       return `
         <button class="match-card${active}" data-match-id="${match.id}" type="button">
           <div class="match-card-top">
-            <span>${match.date} · ${match.group}</span>
-            <span class="${statusClass(match)}">${statusText[match.status]}</span>
+            <span class="match-meta">
+              <span>${match.date}</span>
+              <span>${match.group}</span>
+            </span>
+            <span class="prediction-pill ${prediction ? "predicted" : "pending"}">${prediction ? "已预测" : "待预测"}</span>
           </div>
           <div class="team-line">
             <span>${match.home}</span>
             <span>${match.score}</span>
             <span>${match.away}</span>
-          </div>
-          <div class="mini-score">
-            <span>${match.kickoffTime || "可分析度"}</span>
-            <strong>${prediction ? "已预测" : "未预测"} · 可分析 ${evidenceScore.score}分</strong>
           </div>
         </button>
       `;
@@ -749,17 +747,121 @@ function renderPredictionPlaceholder() {
         <p>预测后展示大/小球或区间判断。</p>
       </article>
       <article class="result-card">
-        <span>半全场</span>
-        <strong>待生成</strong>
-        <p>预测后展示上半场走势和全场延展。</p>
-      </article>
-      <article class="result-card">
         <span>比分</span>
         <strong>待生成</strong>
         <p>仅作娱乐参考，不作为投资建议。</p>
       </article>
+      <article class="result-card wide">
+        <span>半全场</span>
+        <strong>待生成</strong>
+        <p>预测后展示上半场走势、全场延展和关键触发条件。</p>
+      </article>
     </div>
   `;
+}
+
+const textDictionary = [
+  [/first[\s_-]*half/gi, "上半场"],
+  [/second[\s_-]*half/gi, "下半场"],
+  [/full[\s_-]*time/gi, "全场"],
+  [/half[\s_-]*time/gi, "半场"],
+  [/home[\s_-]*win/gi, "主队胜"],
+  [/away[\s_-]*win/gi, "客队胜"],
+  [/\bdraw\b/gi, "平局"],
+  [/\bover\b/gi, "大球"],
+  [/\bunder\b/gi, "小球"],
+  [/\bhigh\b/gi, "高"],
+  [/\bmedium\b/gi, "中"],
+  [/\blow\b/gi, "低"],
+  [/\bconfidence\b/gi, "信心"],
+  [/\bprobability\b/gi, "概率"],
+  [/\btrigger\b/gi, "触发条件"],
+  [/\bcondition\b/gi, "条件"],
+  [/\bscoreline\b/gi, "比分"],
+  [/\blineup\b/gi, "首发"],
+  [/\binjury\b/gi, "伤停"],
+  [/\bpressing\b/gi, "压迫"],
+  [/\bcounter[\s_-]*attack/gi, "反击"],
+  [/\bset[\s_-]*piece/gi, "定位球"],
+  [/\bxG\b/g, "预期进球"],
+  [/\bTurkey\b/g, "土耳其"],
+  [/\bUruguay\b/g, "乌拉圭"],
+  [/\bSpain\b/g, "西班牙"],
+  [/\bJapan\b/g, "日本"],
+  [/\bEngland\b/g, "英格兰"],
+  [/\bCroatia\b/g, "克罗地亚"]
+];
+
+const keyLabelMap = {
+  winner: "胜平负",
+  win_tendency: "胜负倾向",
+  confidence: "信心",
+  confidence_score: "信心分",
+  first_half: "上半场",
+  firstHalf: "上半场",
+  full_time: "全场",
+  fullTime: "全场",
+  key_evidence: "关键依据",
+  evidence: "依据",
+  reason: "原因",
+  summary: "摘要",
+  text: "说明",
+  result: "结果",
+  tendency: "倾向",
+  total_goals: "总进球",
+  goal_line: "进球线",
+  over_under: "大小球",
+  half_full: "半全场",
+  halfFull: "半全场",
+  ht_ft: "半全场",
+  score_range: "比分区间",
+  scoreRange: "比分区间",
+  tactical_profile: "技战术画像",
+  tacticalProfile: "技战术画像",
+  player_functions: "球员功能",
+  playerFunctions: "球员功能",
+  market_check: "市场校验",
+  marketCheck: "市场校验",
+  score: "比分",
+  goals: "进球数",
+  name: "分支名称",
+  type: "类型",
+  level: "概率等级",
+  probability: "概率",
+  trigger: "触发条件",
+  condition: "条件",
+  direction: "方向",
+  bet_direction: "投注方向",
+  source_check: "信息源校验",
+  source_reliability: "来源可信度",
+  information_gaps: "信息缺口",
+  missing_sources: "缺失信息源",
+  is_analyzable: "是否适合分析",
+  filter_reason: "过滤理由",
+  matchup: "对位分析",
+  matchup_analysis: "对位分析",
+  branches: "比赛分支",
+  scenarios: "比赛分支",
+  risk: "风险",
+  cold_risk: "冷门风险",
+  recommendation: "建议",
+  avoid: "不建议选择"
+};
+
+function zhLabel(key) {
+  return keyLabelMap[key] || "补充信息";
+}
+
+function polishText(text) {
+  let output = String(text || "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*;\s*/g, "；")
+    .replace(/\s*,\s*/g, "，")
+    .trim();
+  for (const [pattern, replacement] of textDictionary) {
+    output = output.replace(pattern, replacement);
+  }
+  return output;
 }
 
 function valueText(value, fallback = "待模型给出") {
@@ -767,14 +869,14 @@ function valueText(value, fallback = "待模型给出") {
   if (Array.isArray(value)) return value.map((item) => valueText(item, "")).filter(Boolean).join("；");
   if (typeof value === "object") {
     if (value.summary || value.text || value.result || value.reason || value.tendency) {
-      return value.summary || value.text || value.result || value.reason || value.tendency;
+      return polishText(value.summary || value.text || value.result || value.reason || value.tendency);
     }
     return Object.entries(value)
       .filter(([, item]) => item !== null && item !== undefined && item !== "")
-      .map(([key, item]) => `${key}：${valueText(item, "")}`)
+      .map(([key, item]) => `${zhLabel(key)}：${valueText(item, "")}`)
       .join("；") || fallback;
   }
-  return String(value);
+  return polishText(value);
 }
 
 function parseJsonObject(text) {
@@ -904,14 +1006,14 @@ function renderPredictionSummary(prediction) {
         <p>${summary.is_analyzable === false ? "建议跳过" : "可分析 / 谨慎观察"}</p>
       </article>
       <article class="result-card">
-        <span>半全场</span>
-        <strong>${halfFull}</strong>
-        <p>${firstHalf}</p>
-      </article>
-      <article class="result-card">
         <span>比分</span>
         <strong>${scorePick}</strong>
         <p>娱乐参考，不作为投资建议</p>
+      </article>
+      <article class="result-card wide">
+        <span>半全场</span>
+        <strong>${halfFull}</strong>
+        <p>${firstHalf}</p>
       </article>
     </div>
     <div class="prediction-section">
