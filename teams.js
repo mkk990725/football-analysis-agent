@@ -191,6 +191,9 @@ function renderTeamCard(team, detail) {
   const links = linkList(localProfile, remoteProfile);
   const players = detail.players || [];
   const coach = localProfile.coach || "待核验";
+  const coachStyle = localProfile.coachStyle || localProfile.coachSummary || "需要结合赛前发布会、近赛首发和临场换人记录继续核验。";
+  const tacticalStyle = localProfile.tacticalStyle || localProfile.summary || "需要补充球队近期进攻、防守和转换阶段的结构化样本。";
+  const tacticalCheck = localProfile.tacticalCheck || "赛前重点看首发阵型、中锋人选、后腰保护、边后卫压上、核心轮休和热身伤退。";
   const sourceLinks = links.length
     ? links.map((href, index) => `<a href="${escapeHtml(href)}" target="_blank" rel="noreferrer">资料源 ${index + 1}</a>`).join("")
     : "<span>暂无外部链接</span>";
@@ -205,6 +208,23 @@ function renderTeamCard(team, detail) {
         <span class="tag">${escapeHtml(coach)}</span>
       </div>
       <p>${escapeHtml(localProfile.summary || "暂无摘要。")}</p>
+      <div class="team-tactical-grid">
+        <article>
+          <span class="muted-label">主教练执行风格</span>
+          <strong>${escapeHtml(coach)}</strong>
+          <p>${escapeHtml(coachStyle)}</p>
+        </article>
+        <article>
+          <span class="muted-label">球队技战术特点</span>
+          <strong>战术画像</strong>
+          <p>${escapeHtml(tacticalStyle)}</p>
+        </article>
+        <article>
+          <span class="muted-label">赛前核验重点</span>
+          <strong>临场变量</strong>
+          <p>${escapeHtml(tacticalCheck)}</p>
+        </article>
+      </div>
       <div class="team-meta-grid">
         <div>
           <span class="muted-label">球员名单</span>

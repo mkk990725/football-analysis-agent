@@ -27,11 +27,6 @@
               <a href="/teams.html">球队资料</a>
               <a href="/skills.html">分析技能</a>
             </nav>
-            <div class="task-nav">
-              <button class="menu-item active" type="button">任务概览</button>
-              <button class="menu-item" type="button" @click="scrollToLog">处理日志</button>
-              <button class="menu-item" type="button" @click="loadHistory">历史记录</button>
-            </div>
           </aside>
 
           <section class="main-content">
@@ -73,14 +68,6 @@
 
               <div class="button-row">
                 <button
-                  type="button"
-                  class="prematch-update-button"
-                  :disabled="!selectedMatch || prematchLoading"
-                  @click="updatePrematchInfo"
-                >
-                  {{ prematchLoading ? "更新赛前信息中..." : "更新赛前信息" }}
-                </button>
-                <button
                   id="startButton"
                   type="button"
                   class="primary-run-button"
@@ -113,28 +100,6 @@
               <section ref="logPanel" class="log-area">
                 <div v-for="entry in logs" :key="entry.id">[{{ entry.time }}] {{ entry.text }}</div>
               </section>
-            </n-card>
-
-            <n-card v-if="prematchInfo" class="glass-card result-card" :bordered="false">
-              <template #header>赛前信息模块</template>
-              <section class="prematch-summary" :class="{ changed: prematchInfo.changed }">
-                <strong>{{ prematchInfo.changed ? "✅ 更新内容摘要" : "赛前信息已检查" }}</strong>
-                <p>{{ prematchInfo.summary }}</p>
-                <span>{{ prematchInfo.phase?.label }} · {{ formatCheckedAt(prematchInfo.checkedAt) }}</span>
-              </section>
-              <div class="prematch-focus">
-                <span v-for="item in prematchInfo.focus || []" :key="item">{{ item }}</span>
-              </div>
-              <div class="prematch-source-grid">
-                <article v-for="item in prematchInfo.items || []" :key="item.id" :class="`source-${item.status}`">
-                  <div>
-                    <span>{{ item.tier }}</span>
-                    <strong>{{ item.name }}</strong>
-                  </div>
-                  <p>{{ item.note }}</p>
-                  <a :href="item.url" target="_blank" rel="noopener noreferrer">打开来源</a>
-                </article>
-              </div>
             </n-card>
 
             <n-card v-if="sourceNeedsVisible" class="glass-card result-card" :bordered="false">
@@ -241,8 +206,6 @@ const completedSteps = ref(0);
 const running = ref(false);
 const buttonText = ref("开始处理");
 const prediction = ref(null);
-const prematchInfo = ref(null);
-const prematchLoading = ref(false);
 const sourceNeedsVisible = ref(true);
 const logPanel = ref(null);
 const chartEl = ref(null);
@@ -276,11 +239,6 @@ function zhTeam(name) {
 
 function timestamp() {
   return new Date().toLocaleTimeString("zh-CN", { hour12: false });
-}
-
-function formatCheckedAt(value) {
-  if (!value) return "未记录时间";
-  return new Date(value).toLocaleString("zh-CN", { hour12: false });
 }
 
 function currentBeijingIsoDate() {
@@ -373,28 +331,6 @@ async function loadDataSources() {
     title: source.name,
     description: `${source.tier} · ${source.url}${source.note ? ` · ${source.note}` : ""}`
   }));
-}
-
-async function updatePrematchInfo() {
-  if (!selectedMatch.value) return;
-  prematchLoading.value = true;
-  try {
-    log("正在更新赛前信息：Reuters / AP / FIFA / Guardian / BBC / Sky / ESPN / The Analyst / 官方社媒入口...");
-    const response = await fetch("/api/prematch-update", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ match: selectedMatch.value })
-    });
-    if (!response.ok) throw new Error(`赛前信息接口 HTTP ${response.status}`);
-    prematchInfo.value = await response.json();
-    message.success(`✅ ${prematchInfo.value.summary}`);
-    log(`✅ ${prematchInfo.value.summary}`);
-  } catch (error) {
-    message.error(error.message);
-    log(`赛前信息更新失败：${error.message}`);
-  } finally {
-    prematchLoading.value = false;
-  }
 }
 
 function shiftDate(days) {

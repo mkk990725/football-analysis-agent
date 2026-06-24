@@ -9,6 +9,7 @@ const state = {
   sortMode: "score-desc",
   predictions: {},
   reviews: {},
+  prematchInfoByMatch: {},
   weights: {
     strength: 1.25,
     coach: 1.2,
@@ -100,8 +101,12 @@ const el = {
   dateEnd: document.getElementById("dateEnd"),
   applyDate: document.getElementById("applyDate"),
   sortMode: document.getElementById("sortMode"),
+  prevMatchDay: document.getElementById("prevMatchDay"),
+  nextMatchDay: document.getElementById("nextMatchDay"),
   predictionResult: document.getElementById("predictionResult"),
   predictLink: document.getElementById("predictLink"),
+  prematchUpdate: document.getElementById("prematchUpdate"),
+  prematchPanel: document.getElementById("prematchPanel"),
 };
 
 function zhTeam(name) {
@@ -720,9 +725,41 @@ function renderVerdicts(match) {
   const reviewPanel = review ? `<pre>${JSON.stringify(review.result || review, null, 2)}</pre>` : "";
   const predictionPanel = prediction
     ? renderPredictionSummary(prediction)
-    : `<div class="empty-state">这场比赛还没有大模型预测结果。请进入预测模块生成。</div>`;
+    : renderPredictionPlaceholder();
   el.predictionResult.innerHTML = `${actualPanel}${predictionPanel}${comparePanel}${reviewPanel}`;
   if (el.predictLink) el.predictLink.href = `predict.html?match=${encodeURIComponent(match.id)}`;
+}
+
+function renderPredictionPlaceholder() {
+  return `
+    <section class="prediction-brief empty-prediction">
+      <span>整场局势预测分析</span>
+      <strong>暂未生成预测</strong>
+      <p>进入预测模块后，智能体会把赛前信息、球队技战术、球员功能、赛程动机和数据证据整理成可读结论，并同步回这里。</p>
+    </section>
+    <div class="prediction-summary-grid">
+      <article class="result-card accent">
+        <span>胜平负</span>
+        <strong>待生成</strong>
+        <p>预测后展示倾向、信心和主要触发条件。</p>
+      </article>
+      <article class="result-card">
+        <span>进球数</span>
+        <strong>待生成</strong>
+        <p>预测后展示大/小球或区间判断。</p>
+      </article>
+      <article class="result-card">
+        <span>半全场</span>
+        <strong>待生成</strong>
+        <p>预测后展示上半场走势和全场延展。</p>
+      </article>
+      <article class="result-card">
+        <span>比分</span>
+        <strong>待生成</strong>
+        <p>仅作娱乐参考，不作为投资建议。</p>
+      </article>
+    </div>
+  `;
 }
 
 function valueText(value, fallback = "待模型给出") {
@@ -939,6 +976,94 @@ function renderFactors(match) {
   el.factors.innerHTML = `<div class="empty-state">模型证据、信息缺口和来源可信度会在生成预测后展示。</div>`;
 }
 
+function renderPrematchInfo(info) {
+  if (!el.prematchPanel) return;
+  if (!info) {
+    el.prematchPanel.innerHTML = `<div class="empty-state">点击“更新”检查 Reuters / AP / FIFA / Guardian / BBC / Sky / ESPN / The Analyst 与官方社媒入口。</div>`;
+    return;
+  }
+  const accessible = (info.items || []).filter((item) => item.status === "checked");
+  const manual = (info.items || []).filter((item) => item.status === "manual");
+  const unavailable = (info.items || []).filter((item) => item.status === "unavailable");
+  el.prematchPanel.innerHTML = `
+    <section class="prematch-summary ${info.changed ? "changed" : ""}">
+      <strong>${info.changed ? "✅ 更新内容摘要" : "赛前信息已检查"}</strong>
+      <p>${escapeHtml(info.summary)}</p>
+      <span>${escapeHtml(info.phase?.label || "赛前信息检查")} · ${new Date(info.checkedAt).toLocaleString("zh-CN", { hour12: false })}</span>
+    </section>
+    <div class="prematch-focus">
+      ${(info.focus || []).map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
+    </div>
+    <div class="source-health">
+      <b>可访问 ${accessible.length}</b>
+      <b>需登录/人工核验 ${manual.length}</b>
+      <b>暂不可抓取 ${unavailable.length}</b>
+    </div>
+    <div class="prematch-source-grid">
+      ${(info.items || []).map((item) => `
+        <article class="source-${escapeHtml(item.status)}">
+          <div>
+            <span>${escapeHtml(item.tier)}</span>
+            <strong>${escapeHtml(item.name)}</strong>
+          </div>
+          <p>${escapeHtml(item.note)}</p>
+          <a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${item.status === "checked" ? "打开来源" : "查看配置/入口"}</a>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+async function switchMatchDay(days) {
+  const baseDate = state.dateStart || formatIsoDate();
+  const nextDate = addDays(baseDate, days);
+  state.dateStart = nextDate;
+  state.dateEnd = nextDate;
+  if (el.dateStart) el.dateStart.value = nextDate;
+  if (el.dateEnd) el.dateEnd.value = nextDate;
+  try {
+    await refreshScoreboards();
+  } catch {
+    // Keep local cached matches visible if the live service is temporarily unavailable.
+  }
+  const firstMatch = visibleMatches()[0];
+  if (firstMatch) state.selectedId = firstMatch.id;
+  render();
+}
+
+async function updatePrematchInfoForSelectedMatch() {
+  const match = getSelectedMatch();
+  if (!match || !el.prematchPanel) return;
+  const originalText = el.prematchUpdate?.textContent || "更新";
+  if (el.prematchUpdate) {
+    el.prematchUpdate.disabled = true;
+    el.prematchUpdate.textContent = "更新中";
+  }
+  el.prematchPanel.innerHTML = `<div class="empty-state">正在检查赛前信息源，优先验证官方、通讯社、主流媒体和数据入口...</div>`;
+  try {
+    const response = await fetch("/api/prematch-update", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ match })
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const info = await response.json();
+    state.prematchInfoByMatch[match.id] = info;
+    renderPrematchInfo(info);
+  } catch (error) {
+    el.prematchPanel.innerHTML = `
+      <div class="empty-state">
+        赛前信息更新失败：${escapeHtml(error.message)}。如果是 HTTP 404，说明当前后端进程仍是旧版本，需要重启服务。
+      </div>
+    `;
+  } finally {
+    if (el.prematchUpdate) {
+      el.prematchUpdate.disabled = false;
+      el.prematchUpdate.textContent = originalText;
+    }
+  }
+}
+
 function render() {
   dedupeMatchesByKey();
   ensureUsableFilter();
@@ -955,6 +1080,7 @@ function render() {
   renderVerdicts(match);
   renderScripts(match);
   renderFactors(match);
+  renderPrematchInfo(state.prematchInfoByMatch[match.id] || null);
 }
 
 document.querySelectorAll(".filter-tabs button").forEach((button) => {
@@ -979,6 +1105,12 @@ el.list.addEventListener("click", (event) => {
 });
 
 el.applyDate.addEventListener("click", applyDateRange);
+
+el.prevMatchDay?.addEventListener("click", () => switchMatchDay(-1));
+
+el.nextMatchDay?.addEventListener("click", () => switchMatchDay(1));
+
+el.prematchUpdate?.addEventListener("click", updatePrematchInfoForSelectedMatch);
 
 el.sortMode.addEventListener("change", () => {
   state.sortMode = el.sortMode.value;

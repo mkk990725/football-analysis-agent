@@ -73,6 +73,10 @@
                 <span class="muted-label">比赛列表</span>
                 <h2>按当前筛选显示</h2>
               </div>
+              <div class="day-switcher" aria-label="切换比赛日期">
+                <button id="prevMatchDay" type="button" title="前一天">‹</button>
+                <button id="nextMatchDay" type="button" title="后一天">›</button>
+              </div>
             </div>
             <div class="match-list" id="matchList" aria-label="比赛列表"></div>
           </section>
@@ -101,6 +105,17 @@
               </article>
 
               <aside class="side-stack" id="factorSection">
+                <div class="section-head compact">
+                  <div>
+                    <span class="muted-label">Reuters / AP / FIFA / Guardian</span>
+                    <h2>赛前信息</h2>
+                  </div>
+                  <button class="secondary-action" id="prematchUpdate" type="button">更新</button>
+                </div>
+                <div class="prematch-panel" id="prematchPanel">
+                  <div class="empty-state">选择比赛后，点击“更新”检查赛前 24 小时、3-6 小时、60-75 分钟的信息源。</div>
+                </div>
+
                 <div class="section-head compact">
                   <div>
                     <span class="muted-label">模型输入</span>
