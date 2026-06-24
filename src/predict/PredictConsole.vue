@@ -86,6 +86,11 @@
                 </button>
               </div>
 
+              <div v-if="errorNotice" class="feedback-banner feedback-error">
+                <span>!</span>
+                <p>{{ errorNotice }}</p>
+              </div>
+
               <div class="stepper">
                 <div
                   v-for="(step, index) in steps"
@@ -100,18 +105,6 @@
               <section ref="logPanel" class="log-area">
                 <div v-for="entry in logs" :key="entry.id">[{{ entry.time }}] {{ entry.text }}</div>
               </section>
-            </n-card>
-
-            <n-card v-if="sourceNeedsVisible" class="glass-card result-card" :bordered="false">
-              <template #header>信息源缺口诊断</template>
-              <n-alert type="warning" :bordered="false">
-                当前不是“系统找不到所有信息”，而是没有接入这些来源的结构化抓取。需要把下面来源接入为可验证数据层，模型才能降低不确定性。
-              </n-alert>
-              <n-list class="source-list">
-                <n-list-item v-for="item in sourceNeeds" :key="item.title">
-                  <n-thing :title="item.title" :description="item.description" />
-                </n-list-item>
-              </n-list>
             </n-card>
 
             <n-card v-if="prediction" class="glass-card result-card" :bordered="false">
@@ -147,21 +140,27 @@
 
               <div ref="chartEl" class="chart"></div>
 
-              <div class="analysis-grid">
-                <n-card embedded title="上半场可能走势">{{ valueText(prediction.first_half || prediction.firstHalf) }}</n-card>
-                <n-card embedded title="全场可能走势">{{ valueText(prediction.full_time || prediction.fullTime) }}</n-card>
-                <n-card embedded title="关键依据">{{ valueText(prediction.key_evidence || prediction.evidence) }}</n-card>
-                <n-card embedded title="球队数据校验">{{ valueText(prediction.team_data_check, "模型未单独给出球队数据校验。") }}</n-card>
-                <n-card embedded title="信息源缺口">{{ valueText(prediction.information_gaps || prediction.missing_sources, sourceGapFallback) }}</n-card>
-                <n-card embedded title="娱乐参考前三项">
-                  <div v-if="top3.length" class="top3">
-                    <n-tag v-for="(item, index) in top3" :key="index" type="info">
-                      {{ valueText(item.score || item.scoreline || item.result, "-") }} / {{ valueText(item.half_full || item.halfFull || item.ht_ft, "半全场未给出") }}
-                    </n-tag>
-                  </div>
-                  <span v-else>模型没有给出娱乐比分前三项。</span>
-                </n-card>
-              </div>
+              <section class="visible-reasoning">
+                <h3>分析过程</h3>
+                <p>{{ resultReasoning }}</p>
+              </section>
+            </n-card>
+
+            <n-card v-if="codexPackage" class="glass-card result-card" :bordered="false">
+              <template #header>Codex 大脑分析包</template>
+              <section class="situation-summary">
+                <span>当前状态</span>
+                <strong>已整理输入，等待当前 Codex 对话执行分析</strong>
+                <p>网页不能直接调用你正在聊天的 Codex 会话，所以这里不再伪装成预测结果。真正的张路式判断需要在当前对话里基于这份输入继续分析。</p>
+              </section>
+              <section class="visible-reasoning">
+                <h3>可见处理过程</h3>
+                <p>{{ codexPackage.process }}</p>
+              </section>
+              <details class="package-details">
+                <summary>查看给 Codex 的分析输入</summary>
+                <pre>{{ codexPackage.prompt }}</pre>
+              </details>
             </n-card>
           </section>
         </div>
@@ -178,7 +177,6 @@ import * as echarts from "echarts";
 const { message } = createDiscreteApi(["message"]);
 const BEIJING_OFFSET_MS = 8 * 60 * 60 * 1000;
 const steps = ["①连接知识库", "②检索信息", "③推理分析", "④生成回复"];
-const sourceGapFallback = "需要补 Guardian 直播记录、The Analyst/Opta 文章、FIFA 技术统计和全场录像观察。";
 
 const teamNameZh = {
   Argentina: "阿根廷",
@@ -206,23 +204,14 @@ const completedSteps = ref(0);
 const running = ref(false);
 const buttonText = ref("开始处理");
 const prediction = ref(null);
-const sourceNeedsVisible = ref(true);
+const codexPackage = ref(null);
+const errorNotice = ref("");
 const logPanel = ref(null);
 const chartEl = ref(null);
 let chart;
 let jobTimer;
 
-const sourceNeeds = ref([]);
-
-const matchOptions = computed(() => matches.value.map((match) => ({
-  label: `${match.kickoffTime} · ${match.home} vs ${match.away}`,
-  value: match.key
-})));
-
 const selectedMatch = computed(() => matches.value.find((match) => match.key === selectedMatchKey.value));
-const top3 = computed(() => Array.isArray(prediction.value?.entertainment_top3 || prediction.value?.entertainmentTop3)
-  ? (prediction.value.entertainment_top3 || prediction.value.entertainmentTop3).slice(0, 3)
-  : []);
 const resultWinner = computed(() => valueText(prediction.value?.winner || prediction.value?.win_tendency || prediction.value?.full_time?.winner || prediction.value?.full_time?.tendency, "未明确"));
 const resultConfidence = computed(() => valueText(prediction.value?.confidence || prediction.value?.confidence_score || prediction.value?.source_reliability?.confidence, "未明确"));
 const resultAnalyzable = computed(() => prediction.value?.is_analyzable === false ? "建议跳过" : "可分析 / 谨慎观察");
@@ -232,6 +221,13 @@ const resultFirstHalf = computed(() => summarizeText(prediction.value?.first_hal
 const resultGoals = computed(() => valueText(prediction.value?.total_goals || prediction.value?.goals || prediction.value?.goal_line || prediction.value?.over_under || prediction.value?.market_check?.total_goals, "未明确"));
 const resultHalfFull = computed(() => valueText(prediction.value?.half_full || prediction.value?.halfFull || prediction.value?.ht_ft || prediction.value?.entertainment_top3?.[0]?.half_full || prediction.value?.entertainmentTop3?.[0]?.halfFull, "未明确"));
 const resultScore = computed(() => valueText(prediction.value?.score || prediction.value?.score_range || prediction.value?.scoreRange || prediction.value?.entertainment_top3?.[0]?.score || prediction.value?.entertainmentTop3?.[0]?.score, "未明确"));
+const resultReasoning = computed(() => summarizeText(
+  prediction.value?.reasoning
+    || prediction.value?.analysis_process
+    || prediction.value?.key_evidence
+    || prediction.value?.evidence,
+  "本次结果没有返回可展示的分析过程。"
+));
 
 function zhTeam(name) {
   return teamNameZh[name] || name || "待确认";
@@ -312,6 +308,7 @@ function eventToMatch(event) {
 async function loadMatches() {
   if (!selectedDate.value) return;
   const previousKey = selectedMatchKey.value;
+  errorNotice.value = "";
   const response = await fetch(`/api/matches?start=${selectedDate.value}&end=${selectedDate.value}`);
   if (!response.ok) throw new Error(`赛程接口 HTTP ${response.status}`);
   const payload = await response.json();
@@ -321,16 +318,6 @@ async function loadMatches() {
   selectedMatchKey.value = matches.value.some((match) => match.key === previousKey)
     ? previousKey
     : matches.value[0]?.key || "";
-}
-
-async function loadDataSources() {
-  const response = await fetch("/api/data-sources");
-  if (!response.ok) return;
-  const payload = await response.json();
-  sourceNeeds.value = (payload.stableEntrances || []).map((source) => ({
-    title: source.name,
-    description: `${source.tier} · ${source.url}${source.note ? ` · ${source.note}` : ""}`
-  }));
 }
 
 function shiftDate(days) {
@@ -386,7 +373,7 @@ function normalizePredictionSummary(summary) {
   return summary || {};
 }
 
-function valueText(value, fallback = "待模型给出") {
+function valueText(value, fallback = "未返回明确结论") {
   if (value === null || value === undefined || value === "") return fallback;
   if (Array.isArray(value)) return value.map((item) => valueText(item, "")).filter(Boolean).join("；");
   if (typeof value === "object") {
@@ -401,7 +388,7 @@ function valueText(value, fallback = "待模型给出") {
   return String(value);
 }
 
-function summarizeText(value, fallback = "待模型给出") {
+function summarizeText(value, fallback = "未返回明确结论") {
   const text = valueText(value, fallback);
   if (text === fallback) return text;
   return text.length > 120 ? `${text.slice(0, 120)}...` : text;
@@ -450,6 +437,8 @@ async function runTask() {
   completedSteps.value = 0;
   logs.value = [];
   prediction.value = null;
+  codexPackage.value = null;
+  errorNotice.value = "";
   try {
     log("正在提交后台预测任务...");
     completedSteps.value = 1;
@@ -467,6 +456,7 @@ async function runTask() {
     await pollPredictionJob(job.id);
   } catch (error) {
     log(`任务失败：${error.message}`);
+    errorNotice.value = error.message;
     message.error(error.message);
     buttonText.value = "重新处理";
   } finally {
@@ -508,26 +498,46 @@ async function pollPredictionJob(id) {
 
 async function runCodexPackage() {
   if (!selectedMatch.value) return;
-  log("正在生成 Codex 分析包...");
-  const response = await fetch("/api/codex-analysis-package", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ match: selectedMatch.value })
-  });
-  if (!response.ok) {
-    message.error(`Codex 分析包生成失败：HTTP ${response.status}`);
-    return;
+  running.value = true;
+  buttonText.value = "整理中...";
+  completedSteps.value = 0;
+  logs.value = [];
+  prediction.value = null;
+  codexPackage.value = null;
+  errorNotice.value = "";
+  try {
+    log("正在整理当前比赛信息...");
+    completedSteps.value = 1;
+    const response = await fetch("/api/codex-analysis-package", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ match: selectedMatch.value })
+    });
+    if (!response.ok) throw new Error(`Codex 分析包接口 HTTP ${response.status}`);
+    completedSteps.value = 2;
+    log("已读取赛程、球队、可用数据源和分析技能。");
+    const payload = await response.json();
+    completedSteps.value = 3;
+    log("已生成张路式分析输入包：先看技战术和人员功能，再看信息缺口，最后才校验市场。");
+    codexPackage.value = {
+      process: [
+        `比赛：${selectedMatch.value.home} vs ${selectedMatch.value.away}`,
+        "处理顺序：官方信息 -> 权威媒体 -> 数据源 -> 技战术画像 -> 球员功能 -> 对位分支。",
+        "注意：当前网页不能直接连接这条 Codex 对话，因此不会在页面里编造预测结果。"
+      ].join("；"),
+      prompt: payload.prompt
+    };
+    completedSteps.value = 4;
+    log("整理完成。需要我在当前对话里继续分析这场比赛时，直接告诉我比赛名称即可。");
+    buttonText.value = "处理完成";
+  } catch (error) {
+    log(`Codex 分析包生成失败：${error.message}`);
+    errorNotice.value = error.message;
+    message.error(error.message);
+    buttonText.value = "重新处理";
+  } finally {
+    running.value = false;
   }
-  const payload = await response.json();
-  prediction.value = {
-    is_analyzable: false,
-    information_gaps: payload.missingSources,
-    key_evidence: payload.prompt,
-    team_data_check: "这是可交给当前 Codex 对话继续分析的输入包。浏览器不能直接调用这条 Codex 会话。"
-  };
-  sourceNeedsVisible.value = true;
-  await nextTick();
-  renderChart();
 }
 
 function scrollToLog() {
@@ -566,17 +576,17 @@ loadMatches().catch((error) => {
   log(`赛程同步失败：${error.message}`);
   message.error(error.message);
 });
-loadDataSources().catch(() => {});
 restoreActiveJob();
 </script>
 
 <style scoped>
 :global(body) {
   margin: 0;
-  background: #f5f7fb;
-  color: #172033;
+  background: #f9fafb;
+  color: #111827;
   font-family:
-    "Segoe UI",
+    Manrope,
+    Inter,
     system-ui,
     -apple-system,
     "PingFang SC",
@@ -589,25 +599,30 @@ restoreActiveJob();
 
 .page-shell {
   min-height: 100vh;
-  background: #f5f7fb;
+  background:
+    radial-gradient(circle at 12% 8%, rgba(196, 81, 0, 0.08), transparent 28%),
+    radial-gradient(circle at 88% 4%, rgba(0, 94, 162, 0.08), transparent 24%),
+    #f9fafb;
 }
 
 .navbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
   height: 64px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0 28px;
-  border-bottom: 1px solid rgba(39, 50, 70, 0.88);
-  background:
-    linear-gradient(165deg, rgba(15, 21, 30, 0.98) 0%, rgba(8, 11, 17, 1) 100%),
-    radial-gradient(90% 120% at 100% 0%, rgba(98, 167, 255, 0.12), transparent 55%);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+  border-bottom: 1px solid rgba(229, 231, 235, 0.78);
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.85) inset;
 }
 
 .brand,
 .home-link {
-  color: #e8eef8;
+  color: #111827;
   text-decoration: none;
   font-weight: 900;
 }
@@ -622,11 +637,12 @@ restoreActiveJob();
   display: inline-flex;
   align-items: center;
   padding: 0 10px;
-  border: 1px solid rgba(98, 167, 255, 0.35);
-  border-radius: 10px;
-  color: #9ec5ff;
-  background: rgba(98, 167, 255, 0.1);
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  color: #4b5563;
+  background: #fff;
   font-size: 13px;
+  box-shadow: 0 8px 24px -20px rgba(28, 28, 25, 0.55);
 }
 
 .nav-right {
@@ -644,22 +660,21 @@ restoreActiveJob();
 }
 
 .status-text {
-  color: #17803d;
+  color: #166534;
   font-weight: 800;
 }
 
 .layout {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  grid-template-columns: 256px minmax(0, 1fr);
   min-height: calc(100vh - 64px);
 }
 
 .sidebar {
   padding: 20px 16px;
-  border-right: 1px solid rgba(39, 50, 70, 0.88);
-  background:
-    linear-gradient(165deg, rgba(15, 21, 30, 0.98) 0%, rgba(8, 11, 17, 1) 52%, #060910 100%),
-    radial-gradient(120% 80% at 0% 0%, rgba(98, 167, 255, 0.1) 0%, transparent 55%);
+  border-right: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px);
 }
 
 .brand-block {
@@ -668,7 +683,7 @@ restoreActiveJob();
   gap: 12px;
   margin-bottom: 18px;
   padding-bottom: 16px;
-  border-bottom: 1px solid rgba(42, 53, 68, 0.72);
+  border-bottom: 1px solid #f0f1f4;
 }
 
 .brand-mark {
@@ -677,28 +692,25 @@ restoreActiveJob();
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  color: #0f172a;
-  background: linear-gradient(145deg, #f0f5ff 0%, #62a7ff 55%, #3d7edc 100%);
+  color: #fff;
+  background: linear-gradient(145deg, #9c3f00, #c45100);
+  box-shadow: 0 14px 32px -22px rgba(156, 63, 0, 0.9);
   font-weight: 900;
 }
 
 .brand-block h1 {
   margin: 0;
   font-size: 18px;
-  background: linear-gradient(125deg, #f0f5ff 0%, #9ec5ff 55%, #7aa8ff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: #111827;
 }
 
 .brand-block p {
   margin: 4px 0 0;
-  color: #8b97ab;
+  color: #6b7280;
   font-size: 12px;
 }
 
-.side-nav,
-.task-nav {
+.side-nav {
   display: grid;
   gap: 6px;
 }
@@ -714,7 +726,7 @@ restoreActiveJob();
   padding: 0 12px;
   border: 1px solid transparent;
   border-radius: 10px;
-  color: #8b97ab;
+  color: #4b5563;
   text-decoration: none;
   font-size: 13px;
   font-weight: 800;
@@ -722,44 +734,28 @@ restoreActiveJob();
 
 .side-nav a.active,
 .side-nav a:hover {
-  color: #e8eef8;
-  border-color: rgba(98, 167, 255, 0.35);
-  background: rgba(98, 167, 255, 0.12);
-  box-shadow: inset 3px 0 0 rgba(98, 167, 255, 0.88);
-}
-
-.menu-item {
-  width: 100%;
-  min-height: 40px;
-  padding: 0 12px;
-  margin-bottom: 6px;
-  border: 1px solid transparent;
-  border-radius: 10px;
-  color: #8b97ab;
-  background: transparent;
-  text-align: left;
-  font-weight: 800;
-  cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
-}
-
-.menu-item.active,
-.menu-item:hover {
-  color: #e8eef8;
-  border-color: rgba(98, 167, 255, 0.35);
-  background: rgba(98, 167, 255, 0.12);
-  box-shadow: inset 3px 0 0 rgba(98, 167, 255, 0.88);
+  color: #9c3f00;
+  border-color: rgba(196, 81, 0, 0.18);
+  background: rgba(196, 81, 0, 0.08);
+  box-shadow: inset 3px 0 0 rgba(196, 81, 0, 0.78);
 }
 
 .main-content {
-  padding: 28px;
+  padding: 32px;
 }
 
 .glass-card {
-  border: 1px solid #dce4ee;
-  border-radius: 14px;
+  border: 1px solid rgba(224, 192, 178, 0.32);
+  border-radius: 24px;
   background: #ffffff;
-  box-shadow: 0 12px 34px rgba(26, 39, 69, 0.08);
+  box-shadow: 0 18px 48px -40px rgba(28, 28, 25, 0.55);
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+
+.glass-card:hover {
+  transform: translateY(-1px);
+  border-color: rgba(196, 81, 0, 0.22);
+  box-shadow: 0 28px 70px -50px rgba(28, 28, 25, 0.68);
 }
 
 :deep(.n-card) {
@@ -800,8 +796,8 @@ restoreActiveJob();
 
 .control-card,
 .result-card {
-  max-width: 1120px;
-  margin: 0 auto 18px;
+  max-width: 1040px;
+  margin: 0 auto 20px;
 }
 
 .card-title {
@@ -822,10 +818,10 @@ restoreActiveJob();
 }
 
 .native-control {
-  min-height: 38px;
-  border: 1px solid #dce4ee;
-  border-radius: 10px;
-  color: #172033;
+  min-height: 42px;
+  border: 1px solid #d1d5db;
+  border-radius: 12px;
+  color: #111827;
   background: #ffffff;
   padding: 0 12px;
   font: inherit;
@@ -834,8 +830,8 @@ restoreActiveJob();
 
 .native-control:hover,
 .native-control:focus {
-  border-color: #9ebcff;
-  box-shadow: 0 0 0 3px rgba(47, 111, 236, 0.1);
+  border-color: #d47030;
+  box-shadow: 0 0 0 4px rgba(196, 81, 0, 0.1);
 }
 
 .match-select {
@@ -856,8 +852,7 @@ restoreActiveJob();
 }
 
 .primary-run-button,
-.codex-mini-button,
-.prematch-update-button {
+.codex-mini-button {
   border: 1px solid transparent;
   border-radius: 10px;
   font: inherit;
@@ -871,50 +866,38 @@ restoreActiveJob();
   min-height: 46px;
   padding: 0 26px;
   color: #ffffff;
-  border-color: #2f6fec;
-  background: linear-gradient(135deg, #2f6fec, #3d7edc);
-  box-shadow: 0 12px 26px rgba(47, 111, 236, 0.2);
+  border-color: #c45100;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #9c3f00, #c45100);
+  box-shadow: 0 16px 32px -22px rgba(156, 63, 0, 0.85);
 }
 
 .codex-mini-button {
-  min-height: 34px;
-  padding: 0 12px;
-  color: #2f6fec;
-  border-color: #d6e4ff;
-  background: #eef4ff;
-  font-size: 12px;
-}
-
-.prematch-update-button {
-  min-height: 40px;
-  padding: 0 14px;
-  color: #172033;
-  border-color: #cbd5e1;
-  background: #ffffff;
+  min-height: 42px;
+  padding: 0 16px;
+  color: #005ea2;
+  border-color: rgba(0, 94, 162, 0.22);
+  border-radius: 12px;
+  background: #f0f7ff;
   font-size: 13px;
 }
 
 .primary-run-button:hover:not(:disabled),
-.codex-mini-button:hover:not(:disabled),
-.prematch-update-button:hover:not(:disabled) {
+.codex-mini-button:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: #2f6fec;
-  box-shadow: 0 12px 26px rgba(47, 111, 236, 0.22);
+  box-shadow: 0 18px 38px -26px rgba(156, 63, 0, 0.72);
 }
 
 .primary-run-button:focus-visible,
 .codex-mini-button:focus-visible,
-.prematch-update-button:focus-visible,
 .home-link:focus-visible,
-.menu-item:focus-visible,
 .native-control:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(47, 111, 236, 0.22);
+  box-shadow: 0 0 0 4px rgba(196, 81, 0, 0.14);
 }
 
 .primary-run-button:disabled,
-.codex-mini-button:disabled,
-.prematch-update-button:disabled {
+.codex-mini-button:disabled {
   cursor: not-allowed;
   opacity: 0.52;
   box-shadow: none;
@@ -929,29 +912,66 @@ restoreActiveJob();
 
 .step {
   padding: 13px 12px;
-  border: 1px solid #dce4ee;
+  border: 1px solid #e5e7eb;
   border-radius: 12px;
-  color: #6b7688;
-  background: #f8fafc;
+  color: #6b7280;
+  background: #f9fafb;
   text-align: center;
   font-weight: 900;
 }
 
 .step.completed {
-  color: #2f6fec;
-  border-color: #b9cef8;
-  background: #eef4ff;
+  color: #9c3f00;
+  border-color: rgba(196, 81, 0, 0.28);
+  background: #fff7ed;
 }
 
 .log-area {
   height: 200px;
   overflow-y: auto;
   padding: 14px;
-  border: 1px solid #dce4ee;
+  border: 1px solid #111827;
   border-radius: 12px;
-  background: #0f172a;
-  color: #dbeafe;
+  background: #111827;
+  color: #e5e7eb;
   font: 13px/1.7 Consolas, "SFMono-Regular", monospace;
+}
+
+.feedback-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 720px;
+  margin: -8px auto 18px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.feedback-banner span {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  font-weight: 900;
+}
+
+.feedback-banner p {
+  margin: 0;
+}
+
+.feedback-error {
+  color: #991b1b;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+}
+
+.feedback-error span {
+  color: #fff;
+  background: #dc2626;
 }
 
 .source-list {
@@ -964,24 +984,17 @@ restoreActiveJob();
   margin-top: 18px;
 }
 
-.analysis-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 16px;
-}
-
 .situation-summary {
   padding: 16px;
-  border: 1px solid #dce4ee;
-  border-radius: 14px;
-  background: #f8fbff;
+  border: 1px solid rgba(196, 81, 0, 0.16);
+  border-radius: 18px;
+  background: #fff7ed;
 }
 
 .situation-summary span,
 .prediction-units span {
   display: block;
-  color: #6b7688;
+  color: #6b7280;
   font-size: 12px;
   font-weight: 850;
 }
@@ -989,7 +1002,7 @@ restoreActiveJob();
 .situation-summary strong {
   display: block;
   margin-top: 8px;
-  color: #172033;
+  color: #111827;
   font-size: 20px;
   line-height: 1.35;
 }
@@ -997,7 +1010,7 @@ restoreActiveJob();
 .situation-summary p,
 .prediction-units p {
   margin: 8px 0 0;
-  color: #6b7688;
+  color: #6b7280;
   font-size: 13px;
   line-height: 1.55;
 }
@@ -1012,8 +1025,8 @@ restoreActiveJob();
 .prediction-units article {
   min-height: 118px;
   padding: 14px;
-  border: 1px solid #dce4ee;
-  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
   background: #fff;
   box-shadow: 0 2px 8px rgba(26, 39, 69, 0.05);
 }
@@ -1021,9 +1034,48 @@ restoreActiveJob();
 .prediction-units strong {
   display: block;
   margin-top: 8px;
-  color: #172033;
+  color: #111827;
   font-size: 18px;
   line-height: 1.3;
+}
+
+.visible-reasoning,
+.package-details {
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 18px;
+  background: #f9fafb;
+}
+
+.visible-reasoning h3 {
+  margin: 0 0 8px;
+  color: #111827;
+  font-size: 16px;
+}
+
+.visible-reasoning p {
+  margin: 0;
+  color: #4b5563;
+  line-height: 1.7;
+}
+
+.package-details summary {
+  color: #9c3f00;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.package-details pre {
+  max-height: 420px;
+  overflow: auto;
+  margin: 12px 0 0;
+  padding: 14px;
+  border-radius: 10px;
+  color: #172033;
+  background: #fff;
+  white-space: pre-wrap;
+  font: 13px/1.6 "Consolas", "Microsoft YaHei", monospace;
 }
 
 .prematch-summary {
@@ -1129,12 +1181,6 @@ restoreActiveJob();
   text-decoration: none;
 }
 
-.top3 {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
 @media (max-width: 860px) {
   .layout {
     grid-template-columns: 1fr;
@@ -1149,8 +1195,7 @@ restoreActiveJob();
     display: none;
   }
 
-  .side-nav,
-  .task-nav {
+  .side-nav {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 8px;
   }
@@ -1161,11 +1206,6 @@ restoreActiveJob();
 
   .side-nav a {
     justify-content: center;
-  }
-
-  .menu-item {
-    margin-bottom: 0;
-    text-align: center;
   }
 
   .main-content {
@@ -1180,8 +1220,7 @@ restoreActiveJob();
 
   .stepper,
   .prediction-units,
-  .prematch-source-grid,
-  .analysis-grid {
+  .prematch-source-grid {
     grid-template-columns: 1fr;
   }
 }
