@@ -120,6 +120,25 @@ function zhTeam(name) {
   return teamNameZh[name] || name || "待确认";
 }
 
+function zhGroup(value) {
+  const raw = String(value || "").trim();
+  const match = raw.match(/^Group\s+([A-Z])$/i);
+  if (match) return `${match[1].toUpperCase()}组`;
+  return raw || "分组待确认";
+}
+
+function zhVenue(value) {
+  const raw = String(value || "").trim();
+  const venueMap = {
+    "AT&T Stadium": "AT&T体育场",
+    "Estadio BBVA": "BBVA体育场",
+    "MetLife Stadium": "大都会人寿体育场",
+    "Mercedes-Benz Stadium": "梅赛德斯-奔驰体育场",
+    "SoFi Stadium": "SoFi体育场"
+  };
+  return venueMap[raw] || raw || "球场待确认";
+}
+
 function getSelectedMatch() {
   return window.WORLD_CUP_FIXTURES.find((match) => match.id === state.selectedId) || window.WORLD_CUP_FIXTURES[0];
 }
@@ -544,15 +563,15 @@ function makeSyncedMatch(event) {
     },
     verdicts: [
       ["赛前直接判断", "high", "建议跳过", "这场只是自动同步，还没有完成教练、战术和人员核验。"],
-      ["上半场剧本", "mid", "待补充", "需要首发、教练习惯、弱队是否敢压迫等信息。"],
+      ["上半场剧本", "mid", "暂无明确判断", "需要首发、教练习惯、弱队是否敢压迫等信息。"],
       ["候选池保留", "low", "可以保留", "先进入列表，深挖后再升级或剔除。"]
     ],
     scripts: {
       half: "当前只有赛程、比分、市场和少量统计。不能把强弱关系直接转成上半场领先判断。",
       full: "后续补齐阵容、战术新闻、赔率变化和球队近期半场样本后，才能升级为可分析比赛。",
       scenarios: [
-        ["待补首发", 72],
-        ["待补教练策略", 68],
+        ["首发未确认", 72],
+        ["教练策略未确认", 68],
         ["市场线索可用", favorite ? 58 : 35],
         ["暂不判断", 82]
       ]
@@ -682,14 +701,14 @@ function renderMatchList() {
           <div class="match-card-top">
             <span class="match-meta">
               <span>${match.date}</span>
-              <span>${match.group}</span>
+              <span>${zhGroup(match.group)}</span>
             </span>
             <span class="prediction-pill ${prediction ? "predicted" : "pending"}">${prediction ? "已预测" : "待预测"}</span>
           </div>
           <div class="team-line">
-            <span>${match.home}</span>
+            <span>${zhTeam(match.home)}</span>
             <span>${match.score}</span>
-            <span>${match.away}</span>
+            <span>${zhTeam(match.away)}</span>
           </div>
         </button>
       `;
@@ -707,13 +726,13 @@ function renderHero(match) {
         <div class="hero-top">
           <span class="tag">${match.date}</span>
           <span class="tag">${match.kickoffTime || "北京时间待确认"}</span>
-          <span class="tag dark">${match.group}</span>
-          <span class="tag dark">${match.venue}</span>
+          <span class="tag dark">${zhGroup(match.group)}</span>
+          <span class="tag dark">${zhVenue(match.venue)}</span>
         </div>
         <h2 class="hero-title">
-          <a class="team-name" href="${teamsHref}">${match.home}</a>
+          <a class="team-name" href="${teamsHref}">${zhTeam(match.home)}</a>
           <span>vs</span>
-          <a class="team-name" href="${teamsHref}">${match.away}</a>
+          <a class="team-name" href="${teamsHref}">${zhTeam(match.away)}</a>
         </h2>
         <p class="hero-subtitle">${match.headline}</p>
       </div>
@@ -726,8 +745,6 @@ function renderHero(match) {
           <span class="${statusClass(match)}">${statusText[match.status]}</span>
         </div>
         <div class="badges-row">
-          <span class="tag">${match.recommendation}</span>
-          <span class="tag">${predictionFor(match) ? "已有大模型预测" : "未生成预测"}</span>
           <a class="tag link-tag" href="${teamsHref}">双方球队情报</a>
         </div>
         <p class="hero-subtitle">${match.resultNote}</p>
@@ -742,8 +759,8 @@ function renderVerdicts(match) {
   const actualPanel = match.status === "review" ? `
     <div class="review-card">
       <strong>已赛真实结果</strong>
-      <p>${match.home} ${match.score} ${match.away}</p>
-      <p>${match.resultNote || "已完赛，详细过程数据待补充。"}</p>
+      <p>${zhTeam(match.home)} ${match.score} ${zhTeam(match.away)}</p>
+      <p>${match.resultNote || "已完赛，详细过程数据暂未接入。"}</p>
     </div>
   ` : "";
   const predictionPanel = prediction
@@ -874,7 +891,7 @@ const keyLabelMap = {
 };
 
 function zhLabel(key) {
-  return keyLabelMap[key] || "补充信息";
+  return keyLabelMap[key] || "说明";
 }
 
 function escapeHtml(value = "") {
@@ -985,17 +1002,25 @@ function heatStyle(confidence) {
 
 function renderHeatCard({ title, value, confidence, detail, accent = false, wide = false }) {
   const resultText = valueText(value, "模型未给出明确结果");
-  const hasResult = !/未明确|未给出|待模型|待补充/.test(resultText);
+  const hasResult = !/未明确|未给出|待模型|暂无明确/.test(resultText);
   const finalConfidence = hasResult ? Math.max(0, Math.min(100, Number(confidence) || 0)) : 0;
   return `
     <article class="result-card heat-card${accent ? " accent" : ""}${wide ? " wide" : ""}" style="${heatStyle(finalConfidence)}">
-      <span>${escapeHtml(title)}</span>
-      <strong>${escapeHtml(resultText)}</strong>
-      <div class="heat-meta">
+      <div class="result-card-head">
+        <span>${escapeHtml(title)}</span>
         <b>信心 ${finalConfidence}%</b>
+      </div>
+      <div class="prediction-result-block">
+        <em>结果</em>
+        <strong>${escapeHtml(resultText)}</strong>
+      </div>
+      <div class="heat-meta">
         <i aria-hidden="true"></i>
       </div>
-      ${renderReadableList(detail || value, "模型未给出补充解释。", wide ? 5 : 3)}
+      <div class="prediction-analysis-block">
+        <em>分析</em>
+        ${renderReadableList(detail || value, "暂无明确分析。", wide ? 5 : 3)}
+      </div>
     </article>
   `;
 }
@@ -1064,7 +1089,7 @@ function renderPredictionSummary(prediction) {
   const winner = summary.winner || summary.win_tendency || summary.full_time?.winner || summary.full_time?.tendency;
   const confidence = summary.confidence || summary.confidence_score || summary.source_reliability?.confidence || "模型未给出明确信心程度";
   const situation = summaryText(summary.full_time || summary.fullTime || summary.situation || summary.key_evidence, "模型未给出整场局势摘要。");
-  const firstHalf = summaryText(summary.first_half || summary.firstHalf, "上半场走势待补充。");
+  const firstHalf = summaryText(summary.first_half || summary.firstHalf, "暂无明确上半场走势。");
   const goals = valueText(summary.total_goals || summary.goals || summary.goal_line || summary.over_under || summary.market_check?.total_goals, "未明确");
   const halfFull = valueText(summary.half_full || summary.halfFull || summary.ht_ft || summary.entertainment_top3?.[0]?.half_full || summary.entertainmentTop3?.[0]?.halfFull, "未明确");
   const scorePick = valueText(summary.score || summary.score_range || summary.scoreRange || summary.entertainment_top3?.[0]?.score || summary.entertainmentTop3?.[0]?.score, "未明确");
@@ -1079,7 +1104,7 @@ function renderPredictionSummary(prediction) {
       ${renderReadableList(situation, "模型未给出整场局势摘要。", 4)}
       <div class="half-summary">
         <b>上半场</b>
-        ${renderReadableList(firstHalf, "上半场走势待补充。", 4)}
+        ${renderReadableList(firstHalf, "暂无明确上半场走势。", 4)}
       </div>
     </section>
     <div class="prediction-summary-grid">
@@ -1151,12 +1176,12 @@ function renderTacticalProfile(match) {
       </article>
       <article>
         <span>${escapeHtml(match.home)} 主教练</span>
-        <strong>${escapeHtml(homeProfile.coach || "待补充")}</strong>
+        <strong>${escapeHtml(homeProfile.coach || "暂未接入")}</strong>
         ${renderReadableList(homeProfile.coachStyle || homeProfile.coach_style || homeProfile.summary, "暂无主教练执教信息和战术风格。", 4)}
       </article>
       <article>
         <span>${escapeHtml(match.away)} 主教练</span>
-        <strong>${escapeHtml(awayProfile.coach || "待补充")}</strong>
+        <strong>${escapeHtml(awayProfile.coach || "暂未接入")}</strong>
         ${renderReadableList(awayProfile.coachStyle || awayProfile.coach_style || awayProfile.summary, "暂无主教练执教信息和战术风格。", 4)}
       </article>
     </div>
@@ -1187,19 +1212,44 @@ function showAppToast({ title, message, type = "success", duration = 3000 }) {
 function renderPrematchInfo(info) {
   if (!el.prematchPanel) return;
   if (!info) {
-    el.prematchPanel.innerHTML = `<div class="empty-state">点击“更新”检查 Reuters / AP / FIFA / Guardian / BBC / Sky / ESPN / The Analyst 与官方社媒入口。</div>`;
+    el.prematchPanel.innerHTML = `<div class="empty-state">点击“更新”后，系统会抓取并校验 Reuters / AP / FIFA / Guardian / BBC / Sky / ESPN / The Analyst 与官方社媒的赛前内容。</div>`;
     return;
   }
   const accessible = (info.items || []).filter((item) => item.status === "checked");
   const manual = (info.items || []).filter((item) => item.status === "manual");
-  const unavailable = (info.items || []).filter((item) => item.status === "unavailable");
+  const unavailable = (info.items || []).filter((item) => item.status === "unavailable" || item.status === "no-info");
   const sourceItems = info.items?.length ? info.items : [{
     status: "manual",
     tier: "系统提示",
     name: "暂无可展示来源",
     note: "本次接口没有返回来源明细。需要检查后端赛前信息源配置或网络访问结果。",
-    url: ""
+    evidence: []
   }];
+  const renderSourceBody = (item) => {
+    if (item.status === "checked") {
+      const evidence = Array.isArray(item.evidence) ? item.evidence.filter(Boolean).slice(0, 2) : [];
+      return `
+        <p>${escapeHtml(item.content || item.note || "已完成访问，但没有可读片段。")}</p>
+        ${evidence.length ? `<ol class="source-evidence-list">${evidence.map((text) => `<li>${escapeHtml(text)}</li>`).join("")}</ol>` : ""}
+      `;
+    }
+    if (item.status === "manual") {
+      return `
+        <p>${escapeHtml(item.note || "该源需要登录或人工核验。")}</p>
+        <div class="source-action-needed">${escapeHtml(item.credentialHint || "需要你提供可访问账号、截图或官方页面内容。")}</div>
+      `;
+    }
+    if (item.status === "no-info") {
+      return `
+        <p>${escapeHtml(item.content || item.note || "页面可访问，但本次未获取到本场目标信息。")}</p>
+        <div class="source-action-needed muted">该源本次不计入有效赛前信息。</div>
+      `;
+    }
+    return `
+      <p>${escapeHtml(item.note || "本次没有获取到可用内容。")}</p>
+      <div class="source-action-needed muted">本次未把该源纳入有效信息，预测时会降低赛前信息充分度。</div>
+    `;
+  };
   el.prematchPanel.innerHTML = `
     <section class="prematch-summary ${info.changed ? "changed" : ""}">
       <strong>${info.changed ? "✅ 发现赛前信息更新" : "目前是最新消息"}</strong>
@@ -1210,9 +1260,9 @@ function renderPrematchInfo(info) {
       ${(info.focus || []).map((item) => `<span>${escapeHtml(item)}</span>`).join("")}
     </div>
     <div class="source-health">
-      <b>可访问 ${accessible.length}</b>
-      <b>需登录/人工核验 ${manual.length}</b>
-      <b>暂不可抓取 ${unavailable.length}</b>
+      <b>已获取 ${accessible.length}</b>
+      <b>需要你提供凭证 ${manual.length}</b>
+      <b>本次未获取 ${unavailable.length}</b>
     </div>
     <div class="prematch-source-grid">
       ${sourceItems.map((item) => `
@@ -1221,8 +1271,7 @@ function renderPrematchInfo(info) {
             <span>${escapeHtml(item.tier)}</span>
             <strong>${escapeHtml(item.name)}</strong>
           </div>
-          <p>${escapeHtml(item.note)}</p>
-          ${item.url ? `<a href="${escapeHtml(item.url)}" target="_blank" rel="noopener noreferrer">${item.status === "checked" ? "打开来源" : "查看配置/入口"}</a>` : ""}
+          ${renderSourceBody(item)}
         </article>
       `).join("")}
     </div>

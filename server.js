@@ -414,7 +414,7 @@ async function sourceCheckForMatch(matchLike) {
     requestedMatch: { teamA, teamB, start, end },
     fixtureConfirmed: Boolean(fixture),
     fixture,
-    gate: fixture ? "可继续补充信息源" : "赛程真实性未确认，不能进入预测，只能做资料准备",
+    gate: fixture ? "可继续校验信息源" : "赛程真实性未确认，不能进入预测，只能做资料准备",
     stableEntrances: registry.stableEntrances || [],
     searchQueries,
     sourceTiers: registry.sourceTiers || []
@@ -459,23 +459,32 @@ function prematchSearchSources(match) {
   const q = encodeURIComponent(`"${home}" "${away}" World Cup team news lineups`);
   const loose = encodeURIComponent(`${home} ${away} World Cup team news lineups`);
   return [
-    { id: "reuters-team-news", name: "Reuters team news", tier: "权威媒体", url: `https://www.reuters.com/site-search/?query=${loose}`, keywords: ["team news", "injury", "lineup", home, away] },
-    { id: "ap-team-news", name: "AP team news", tier: "权威媒体", url: `https://apnews.com/search?q=${loose}`, keywords: ["injury", "lineup", home, away] },
-    { id: "guardian-live", name: "Guardian live / minute-by-minute", tier: "直播/赛前页", url: `https://www.theguardian.com/football/live`, keywords: ["live", home, away] },
-    { id: "guardian-search", name: "Guardian match search", tier: "直播/赛前页", url: `https://www.theguardian.com/football/search?q=${loose}`, keywords: [home, away, "team news", "live"] },
-    { id: "bbc-search", name: "BBC Sport search", tier: "二次确认", url: `https://www.bbc.co.uk/search?q=${loose}`, keywords: [home, away, "line-ups", "team news"] },
-    { id: "sky-search", name: "Sky Sports search", tier: "二次确认", url: `https://www.skysports.com/search?q=${loose}`, keywords: [home, away, "team news", "lineups"] },
-    { id: "espn-soccer", name: "ESPN Soccer", tier: "二次确认", url: `https://www.espn.com/soccer/`, keywords: [home, away, "lineups"] },
-    { id: "theanalyst-search", name: "The Analyst / Opta", tier: "结构化数据", url: `https://theanalyst.com/?s=${q}`, keywords: [home, away, "preview", "stats"] },
-    { id: "fifa-match-centre", name: "FIFA Match Centre", tier: "官方源", url: "https://www.fifa.com/en/match-centre", keywords: [home, away, "lineup"] },
-    { id: "fifa-live", name: "FIFA Live", tier: "官方源", url: "https://www.fifa.com/live", keywords: [home, away] },
+    { id: "reuters-team-news", name: "Reuters team news", tier: "权威媒体", url: `https://www.reuters.com/site-search/?query=${loose}`, keywords: ["team news", "injury", "lineup", home, away], home, away },
+    { id: "ap-team-news", name: "AP team news", tier: "权威媒体", url: `https://apnews.com/search?q=${loose}`, keywords: ["injury", "lineup", home, away], home, away },
+    { id: "guardian-live", name: "Guardian live / minute-by-minute", tier: "直播/赛前页", url: `https://www.theguardian.com/football/live`, keywords: ["live", home, away], home, away },
+    { id: "guardian-search", name: "Guardian match search", tier: "直播/赛前页", url: `https://www.theguardian.com/football/search?q=${loose}`, keywords: [home, away, "team news", "live"], home, away },
+    { id: "bbc-search", name: "BBC Sport search", tier: "二次确认", url: `https://www.bbc.co.uk/search?q=${loose}`, keywords: [home, away, "line-ups", "team news"], home, away },
+    { id: "sky-search", name: "Sky Sports search", tier: "二次确认", url: `https://www.skysports.com/search?q=${loose}`, keywords: [home, away, "team news", "lineups"], home, away },
+    { id: "espn-soccer", name: "ESPN Soccer", tier: "二次确认", url: `https://www.espn.com/soccer/`, keywords: [home, away, "lineups"], home, away },
+    { id: "theanalyst-search", name: "The Analyst / Opta", tier: "结构化数据", url: `https://theanalyst.com/?s=${q}`, keywords: [home, away, "preview", "stats"], home, away },
+    { id: "fifa-match-centre", name: "FIFA Match Centre", tier: "官方源", url: "https://www.fifa.com/en/match-centre", keywords: [home, away, "lineup"], home, away },
+    { id: "fifa-live", name: "FIFA Live", tier: "官方源", url: "https://www.fifa.com/live", keywords: [home, away], home, away },
     { id: "x-starting-xi", name: "两队官方 X / 赛事官方社媒", tier: "官方社媒", url: `https://x.com/search?q=${encodeURIComponent(`"Starting XI" "${home}" OR "${away}"`)}`, manual: true },
     { id: "instagram-starting-xi", name: "两队官方 Instagram", tier: "官方社媒", url: `https://www.instagram.com/explore/search/keyword/?q=${encodeURIComponent(`${home} ${away} Starting XI`)}`, manual: true }
   ];
 }
 
 async function fetchSourcePreview(source) {
-  if (source.manual) return { ...source, status: "manual", title: "", matchedKeywords: [], note: "社媒/动态页需要浏览器或平台适配，已提供核验入口。" };
+  if (source.manual) return {
+    ...source,
+    status: "manual",
+    title: "",
+    matchedKeywords: [],
+    needsCredential: true,
+    credentialHint: source.id.includes("instagram") ? "需要 Instagram 可访问账号或你提供官方账号截图/链接。" : "需要 X/Twitter 可访问账号或你提供两队官方账号的首发/伤停截图。",
+    note: "该源属于登录或动态页面，本地服务不能稳定直接抓取正文。",
+    evidence: []
+  };
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 6500);
   try {
@@ -485,19 +494,51 @@ async function fetchSourcePreview(source) {
     });
     const html = await response.text();
     const title = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s+/g, " ").trim() || "";
-    const sample = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 3000);
+    const sample = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
     const lower = sample.toLowerCase();
     const matchedKeywords = (source.keywords || []).filter((kw) => kw && lower.includes(String(kw).toLowerCase()));
+    const evidence = matchedKeywords.slice(0, 4).map((keyword) => {
+      const index = lower.indexOf(String(keyword).toLowerCase());
+      const start = Math.max(0, index - 90);
+      const end = Math.min(sample.length, index + String(keyword).length + 160);
+      return sample.slice(start, end).replace(/\s+/g, " ").trim();
+    }).filter(Boolean);
+    const homeLower = String(source.home || "").toLowerCase();
+    const awayLower = String(source.away || "").toLowerCase();
+    const pairedEvidence = evidence.find((snippet) => {
+      const text = snippet.toLowerCase();
+      return homeLower
+        && awayLower
+        && text.includes(homeLower)
+        && text.includes(awayLower)
+        && !/you searched for|search results|site search|search submit|results for|open close filters|sort by|搜索/.test(text);
+    });
+    const isSearchPage = /search|site-search|\?s=/.test(source.url);
+    const hasTargetInfo = response.ok && matchedKeywords.length && (pairedEvidence || (!isSearchPage && matchedKeywords.includes(source.home) && matchedKeywords.includes(source.away)));
+    const bestEvidence = pairedEvidence || evidence[0] || "";
+    const status = response.ok ? (hasTargetInfo ? "checked" : "no-info") : "unavailable";
     return {
       ...source,
-      status: response.ok ? "checked" : "unavailable",
+      status,
       httpStatus: response.status,
       title,
       matchedKeywords,
-      note: matchedKeywords.length ? `命中关键词：${matchedKeywords.join("、")}` : "页面可访问，但未识别到本场明确更新。"
+      content: hasTargetInfo
+        ? `已获取到本场相关片段，命中：${matchedKeywords.join("、")}。${bestEvidence ? `可读片段：${bestEvidence}` : ""}`
+        : `页面可访问，但没有校验到 ${source.name} 对本场的明确首发、伤停或赛前新闻。页面标题：${title || "未识别"}`,
+      evidence,
+      note: hasTargetInfo ? `命中本场信息：${matchedKeywords.join("、")}` : "页面可访问，但未获取到可用于预测的本场信息。"
     };
   } catch (error) {
-    return { ...source, status: "unavailable", title: "", matchedKeywords: [], note: `抓取失败：${error.message}` };
+    return {
+      ...source,
+      status: "unavailable",
+      title: "",
+      matchedKeywords: [],
+      content: "",
+      evidence: [],
+      note: `本次未获取到内容：${error.message}`
+    };
   } finally {
     clearTimeout(timer);
   }
@@ -522,11 +563,12 @@ async function updatePrematchInfo(match) {
   })));
   const previous = cache[key]?.signature || "";
   const changed = signature !== previous;
-  const found = items.filter((item) => item.matchedKeywords?.length);
+  const found = items.filter((item) => item.status === "checked");
   const manual = items.filter((item) => item.status === "manual");
+  const noInfo = items.filter((item) => item.status === "no-info");
   const unavailable = items.filter((item) => item.status === "unavailable");
   const summary = changed
-    ? `赛前信息已更新：${found.length} 个来源命中关键词，${manual.length} 个官方/社媒入口待人工或浏览器适配核验，${unavailable.length} 个来源暂不可抓取。`
+    ? `赛前信息已更新：${found.length} 个来源命中关键词，${noInfo.length} 个来源未校验到本场目标信息，${manual.length} 个来源需要凭证或人工核验，${unavailable.length} 个来源本次未获取。`
     : "没有发现相比上次点击的新摘要，已重新检查各信息源。";
   const payload = {
     checkedAt: new Date().toISOString(),
