@@ -547,7 +547,7 @@ async function fetchSourcePreview(source) {
     const isSearchPage = /search|site-search|\?s=/.test(source.url);
     const hasTargetInfo = response.ok && matchedKeywords.length && (pairedEvidence || (!isSearchPage && matchedKeywords.includes(source.home) && matchedKeywords.includes(source.away)));
     const bestEvidence = pairedEvidence || evidence[0] || "";
-    const status = response.ok ? (hasTargetInfo ? "checked" : "no-info") : "unavailable";
+    const status = response.ok ? (hasTargetInfo ? "checked" : "disabled") : "disabled";
     return {
       ...source,
       status,
@@ -558,17 +558,19 @@ async function fetchSourcePreview(source) {
         ? `已获取到本场相关片段，命中：${matchedKeywords.join("、")}。${bestEvidence ? `可读片段：${bestEvidence}` : ""}`
         : `页面可访问，但没有校验到 ${source.name} 对本场的明确首发、伤停或赛前新闻。页面标题：${title || "未识别"}`,
       evidence,
-      note: hasTargetInfo ? `命中本场信息：${matchedKeywords.join("、")}` : "页面可访问，但未获取到可用于预测的本场信息。"
+      disabledReason: hasTargetInfo ? "" : "页面可访问，但没有校验到本场目标信息；已取消作为本场预测信息源。",
+      note: hasTargetInfo ? `命中本场信息：${matchedKeywords.join("、")}` : "页面可访问，但未获取到本场目标信息，已取消使用。"
     };
   } catch (error) {
     return {
       ...source,
-      status: "unavailable",
+      status: "disabled",
       title: "",
       matchedKeywords: [],
       content: "",
       evidence: [],
-      note: `本次未获取到内容：${error.message}`
+      disabledReason: `无法稳定合法获取内容：${error.message}`,
+      note: `本次未获取到内容，已取消使用：${error.message}`
     };
   } finally {
     clearTimeout(timer);
@@ -596,10 +598,9 @@ async function updatePrematchInfo(match) {
   const changed = signature !== previous;
   const found = items.filter((item) => item.status === "checked");
   const manual = items.filter((item) => item.status === "manual");
-  const noInfo = items.filter((item) => item.status === "no-info");
-  const unavailable = items.filter((item) => item.status === "unavailable");
+  const disabled = items.filter((item) => item.status === "disabled");
   const summary = changed
-    ? `赛前信息已更新：${found.length} 个来源命中关键词，${noInfo.length} 个来源未校验到本场目标信息，${manual.length} 个来源需要凭证或人工核验，${unavailable.length} 个来源本次未获取。`
+    ? `赛前信息已更新：${found.length} 个来源命中目标信息，${manual.length} 个来源需要授权或人工核验，${disabled.length} 个来源因不合规、不可稳定获取或未命中本场目标信息，已取消使用。`
     : "没有发现相比上次点击的新摘要，已重新检查各信息源。";
   const payload = {
     checkedAt: new Date().toISOString(),

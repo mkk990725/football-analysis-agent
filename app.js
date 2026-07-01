@@ -1212,12 +1212,12 @@ function showAppToast({ title, message, type = "success", duration = 3000 }) {
 function renderPrematchInfo(info) {
   if (!el.prematchPanel) return;
   if (!info) {
-    el.prematchPanel.innerHTML = `<div class="empty-state">点击“更新”后，系统会抓取并校验 Reuters / AP / FIFA / Guardian / BBC / Sky / ESPN / The Analyst 与官方社媒的赛前内容。</div>`;
+    el.prematchPanel.innerHTML = `<div class="empty-state">点击“更新”后，系统只检查合规且命中本场目标的信息源；不合规、不可稳定获取或未命中本场的信息源会直接取消使用。</div>`;
     return;
   }
   const accessible = (info.items || []).filter((item) => item.status === "checked");
   const manual = (info.items || []).filter((item) => item.status === "manual");
-  const unavailable = (info.items || []).filter((item) => item.status === "unavailable" || item.status === "no-info");
+  const disabled = (info.items || []).filter((item) => item.status === "disabled" || item.status === "unavailable" || item.status === "no-info");
   const sourceItems = info.items?.length ? info.items : [{
     status: "manual",
     tier: "系统提示",
@@ -1239,15 +1239,15 @@ function renderPrematchInfo(info) {
         <div class="source-action-needed">${escapeHtml(item.credentialHint || "需要你提供可访问账号、截图或官方页面内容。")}</div>
       `;
     }
-    if (item.status === "no-info") {
+    if (item.status === "disabled" || item.status === "no-info") {
       return `
-        <p>${escapeHtml(item.content || item.note || "页面可访问，但本次未获取到本场目标信息。")}</p>
-        <div class="source-action-needed muted">该源本次不计入有效赛前信息。</div>
+        <p>${escapeHtml(item.disabledReason || item.content || item.note || "该源不合规、不可稳定获取，或未命中本场目标信息。")}</p>
+        <div class="source-action-needed muted">已取消使用，不进入本场预测证据。</div>
       `;
     }
     return `
       <p>${escapeHtml(item.note || "本次没有获取到可用内容。")}</p>
-      <div class="source-action-needed muted">本次未把该源纳入有效信息，预测时会降低赛前信息充分度。</div>
+      <div class="source-action-needed muted">已取消使用，不进入本场预测证据。</div>
     `;
   };
   el.prematchPanel.innerHTML = `
@@ -1262,7 +1262,7 @@ function renderPrematchInfo(info) {
     <div class="source-health">
       <b>已获取 ${accessible.length}</b>
       <b>需要你提供凭证 ${manual.length}</b>
-      <b>本次未获取 ${unavailable.length}</b>
+      <b>已取消使用 ${disabled.length}</b>
     </div>
     <div class="prematch-source-grid">
       ${sourceItems.map((item) => `

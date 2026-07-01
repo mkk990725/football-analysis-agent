@@ -1143,7 +1143,8 @@ summary:focus-visible {
 }
 
 .prematch-source-grid article.source-unavailable,
-.prematch-source-grid article.source-no-info {
+.prematch-source-grid article.source-no-info,
+.prematch-source-grid article.source-disabled {
   background: #fafafa;
   opacity: 0.78;
 }
