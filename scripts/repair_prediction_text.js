@@ -1,0 +1,198 @@
+const fs = require("fs");
+const path = require("path");
+const { DatabaseSync } = require("node:sqlite");
+
+const root = path.join(__dirname, "..");
+const dbPath = path.join(root, "football-agent.db");
+const cachePath = path.join(root, ".cache", "predictions.json");
+
+const now = new Date().toISOString();
+
+const predictions = [
+  {
+    key: "espn-760495",
+    matchId: "espn-760495",
+    date: "2026-07-02",
+    home: "\u82f1\u683c\u5170",
+    away: "\u521a\u679c\uff08\u91d1\uff09",
+    summary: {
+      winner: "\u82f1\u683c\u5170\u80dc",
+      winner_confidence: 61,
+      confidence: 60,
+      confidence_score: 60,
+      total_goals: "2-3\u7403\uff0c\u504f\u5c0f\u6bd4\u5206",
+      total_goals_confidence: 58,
+      score: "2-1",
+      score_confidence: 34,
+      half_full: "\u5e73/\u80dc",
+      half_full_confidence: 48,
+      first_half:
+        "\u521a\u679c\uff08\u91d1\uff09\u5927\u6982\u7387\u75285\u540e\u536b\u6216\u4f4e\u4f4d\u7d27\u51d1\u9635\u578b\u538b\u7f29\u4e2d\u8def\uff0c\u82f1\u683c\u5170\u63a7\u7403\u5360\u4f18\u4f46\u7834\u5bc6\u96c6\u4e0d\u4f1a\u8f7b\u677e\u3002\u4e0a\u534a\u573a\u66f4\u50cf0-0\u6216 1-0\u3002",
+      full_time:
+        "\u82f1\u683c\u5170\u6574\u4f53\u4e2a\u4eba\u80fd\u529b\u548c\u66ff\u8865\u6df1\u5ea6\u66f4\u9ad8\uff0c\u4f46\u521a\u679c\uff08\u91d1\uff09\u9632\u5b88\u7eaa\u5f8b\u3001\u8eab\u4f53\u5bf9\u6297\u548c\u53cd\u51fb\u70b9\u4f1a\u628a\u6bd4\u8d5b\u62d6\u7d27\u3002\u82f1\u683c\u5170\u66f4\u53ef\u80fd\u5728\u4e0b\u534a\u573a\u901a\u8fc7\u5b9a\u4f4d\u7403\u3001\u8fb9\u8def\u6362\u4eba\u6216\u7981\u533a\u4e8c\u70b9\u7403\u6253\u5f00\u5c40\u9762\u3002",
+      winner_reason:
+        "\u82f1\u683c\u5170\u6b63\u5e38\u5b9e\u529b\u5360\u4f18\uff0cOpta \u53e3\u5f84\u4e5f\u660e\u663e\u503e\u5411\u82f1\u683c\u5170\uff1b\u4f46\u516c\u5f00\u62a5\u9053\u6307\u51fa\u521a\u679c\uff08\u91d1\uff09\u672c\u5c4a\u9762\u5bf9\u5f3a\u961f\u9632\u5b88\u8d28\u91cf\u5f88\u9ad8\uff0c\u4e0d\u80fd\u6309\u5927\u80dc\u5904\u7406\u3002",
+      total_goals_reason:
+        "\u521a\u679c\uff08\u91d1\uff09\u4f4e\u4f4d\u9632\u5b88\u4f1a\u964d\u4f4e\u6bd4\u8d5b\u8282\u594f\uff0c\u82f1\u683c\u5170\u7834\u5c40\u6548\u7387\u4e0d\u7a33\u5b9a\uff0c\u6bd4\u5206\u66f4\u50cf1-0\u30012-0\u30012-1\u533a\u95f4\u3002",
+      tactical_profile:
+        "\u82f1\u683c\u5170\u9700\u8981\u89e3\u51b3\u4f4e\u4f4d\u9632\u5b88\u4e0b\u7684\u4e2d\u8def\u521b\u9020\u529b\u95ee\u9898\u3002\u521a\u679c\uff08\u91d1\uff09\u4f9d\u97605-3-2\u4fdd\u62a4\u7981\u533a\uff0cMbemba \u9886\u8854\u9632\u7ebf\uff0cWissa \u662f\u53cd\u51fb\u5a01\u80c1\u3002",
+      player_functions:
+        "\u82f1\u683c\u5170\u5173\u952e\u5728\u8d1d\u6797\u5386\u59c6\u3001\u51ef\u6069\u548c\u8fb9\u8def\u4e00\u5bf9\u4e00\u3002\u521a\u679c\uff08\u91d1\uff09\u5173\u952e\u5728 Wissa \u53cd\u51fb\u3001Wan-Bissaka \u4fa7\u7ffc\u9632\u5b88\u548c\u4e2d\u536b\u7981\u533a\u4fdd\u62a4\u3002",
+      entertainment_top3: [
+        { score: "2-1", half_full: "\u5e73/\u80dc", confidence: 34 },
+        { score: "1-0", half_full: "\u5e73/\u80dc", confidence: 28 },
+        { score: "2-0", half_full: "\u80dc/\u80dc", confidence: 22 }
+      ],
+      match_filter:
+        "\u53ef\u5206\u6790\uff0c\u4f46\u4e0d\u80fd\u5f53\u5927\u80dc\u80c6\u3002\u9002\u5408\u770b\u82f1\u683c\u5170\u4e0d\u8d25/\u5c0f\u80dc\u65b9\u5411\uff0c\u6bd4\u5206\u53ea\u4f5c\u5a31\u4e50\u53c2\u8003\u3002",
+      option_layers: {
+        main_pick: "\u82f1\u683c\u5170\u80dc",
+        secondary_pick: "\u82f1\u683c\u5170\u4e0d\u8d25 + \u5c0f\u6bd4\u5206\u601d\u8def",
+        small_hedge: "\u5e73\u5c40\u98ce\u9669",
+        avoid_pick: "\u82f1\u683c\u5170\u5927\u80dc\u7a7f\u900f\uff0c\u4e0d\u5efa\u8bae\u91cd\u4ed3"
+      }
+    }
+  },
+  {
+    key: "espn-760493",
+    matchId: "espn-760493",
+    date: "2026-07-02",
+    home: "\u6bd4\u5229\u65f6",
+    away: "\u585e\u5185\u52a0\u5c14",
+    summary: {
+      winner: "\u6bd4\u5229\u65f6\u80dc",
+      winner_confidence: 57,
+      confidence: 56,
+      confidence_score: 56,
+      total_goals: "2-3\u7403",
+      total_goals_confidence: 55,
+      score: "2-1",
+      score_confidence: 32,
+      half_full: "\u5e73/\u80dc",
+      half_full_confidence: 46,
+      first_half:
+        "\u4e24\u961f\u5f00\u5c40\u90fd\u4e0d\u4f1a\u592a\u5192\u8fdb\u3002\u6bd4\u5229\u65f6\u4f1a\u5c1d\u8bd5\u7528\u5fb7\u5e03\u52b3\u5185\u548c\u8fb9\u8def\u63a8\u8fdb\u63a7\u5236\u8282\u594f\uff0c\u585e\u5185\u52a0\u5c14\u8eab\u4f53\u5bf9\u6297\u5f3a\uff0c\u53cd\u51fb\u6709\u5a01\u80c1\u3002\u4e0a\u534a\u573a\u66f4\u50cf0-0\u62161-0\u3002",
+      full_time:
+        "\u6bd4\u5229\u65f6\u5c0f\u7ec4\u672b\u8f6e 5-1 \u627e\u56de\u8fdb\u653b\u611f\u89c9\uff0c\u5fb7\u5e03\u52b3\u5185\u3001\u5362\u5361\u5e93\u3001\u5e93\u5c14\u56fe\u74e6\u62c9\u548c\u7279\u7f57\u8428\u5fb7\u8fd9\u4e9b\u6838\u5fc3\u72b6\u6001\u56de\u5347\u3002\u585e\u5185\u52a0\u5c14\u5f3a\u5ea6\u4e0d\u4f4e\uff0c\u4f46\u5982\u679c\u95e8\u5c06\u95e8\u8fea\u7ea6\u7f3a\u9635\uff0c\u7981\u533a\u9632\u5b88\u7a33\u5b9a\u6027\u4e0b\u964d\uff0c\u6bd4\u5229\u65f6\u540e\u6bb5\u8fdb\u7403\u6982\u7387\u66f4\u9ad8\u3002",
+      winner_reason:
+        "\u6bd4\u5229\u65f6\u9635\u5bb9\u7ecf\u9a8c\u548c\u8fdb\u653b\u4e0a\u9650\u7565\u9ad8\uff0c\u4e14\u516c\u5f00\u62a5\u9053\u663e\u793a\u961f\u5185\u5065\u5eb7\u5ea6\u6539\u5584\uff1b\u585e\u5185\u52a0\u5c14\u662f\u5f3a\u4e09\u6863\u7403\u961f\uff0c\u4e0d\u80fd\u6392\u9664\u5e73\u5c40\u3002",
+      total_goals_reason:
+        "\u6bd4\u5229\u65f6\u8fdb\u653b\u56de\u6696\u4f46\u524d\u4e24\u573a\u8fdb\u7403\u6548\u7387\u4e00\u822c\uff0c\u585e\u5185\u52a0\u5c14\u4e0d\u4f1a\u5f00\u653e\u4e92\u6349\uff0c2-1 \u62161-1 \u66f4\u5408\u7406\u3002",
+      tactical_profile:
+        "\u6bd4\u5229\u65f6\u4f9d\u8d56\u4e2d\u524d\u573a\u6838\u5fc3\u4e32\u8054\u548c\u8fb9\u8def\u7206\u70b9\uff0c\u585e\u5185\u52a0\u5c14\u4f9d\u8d56\u8eab\u4f53\u5bf9\u6297\u3001\u8f6c\u6362\u548c\u8fb9\u8def\u51b2\u51fb\u3002\u6bd4\u8d5b\u5173\u952e\u5728\u6bd4\u5229\u65f6\u80fd\u5426\u907f\u5f00\u585e\u5185\u52a0\u5c14\u4e2d\u573a\u7f20\u6597\uff0c\u628a\u7403\u9001\u5230\u7981\u533a\u9ad8\u4ef7\u503c\u533a\u57df\u3002",
+      player_functions:
+        "\u6bd4\u5229\u65f6\u5173\u952e\u662f\u5fb7\u5e03\u52b3\u5185\u6700\u540e\u4e00\u4f20\u3001\u5362\u5361\u5e93\u652f\u70b9\u3001\u7279\u7f57\u8428\u5fb7\u8086\u4f4d\u7ec8\u7ed3\u3001\u5e93\u5c14\u56fe\u74e6\u62c9\u5155\u5e95\u3002\u585e\u5185\u52a0\u5c14\u5173\u952e\u662f\u8fb9\u8def\u63a8\u8fdb\u548c\u4e2d\u950b\u53cd\u51fb\u652f\u70b9\u3002",
+      entertainment_top3: [
+        { score: "2-1", half_full: "\u5e73/\u80dc", confidence: 32 },
+        { score: "1-1", half_full: "\u5e73/\u5e73", confidence: 27 },
+        { score: "1-0", half_full: "\u5e73/\u80dc", confidence: 22 }
+      ],
+      match_filter:
+        "\u8c28\u614e\u53ef\u5206\u6790\u3002\u6bd4\u5229\u65f6\u65b9\u5411\u5360\u4f18\uff0c\u4f46\u585e\u5185\u52a0\u5c14\u4e0d\u662f\u8f6f\u67f4\u5b50\uff0c\u5e73\u5c40\u4fdd\u62a4\u6709\u5fc5\u8981\u3002",
+      option_layers: {
+        main_pick: "\u6bd4\u5229\u65f6\u4e0d\u8d25\uff0c\u501f\u62f3\u6bd4\u5229\u65f6\u80dc",
+        secondary_pick: "2-3\u7403",
+        small_hedge: "1-1\u5e73\u5c40",
+        avoid_pick: "\u6bd4\u5229\u65f6\u5927\u80dc\uff0c\u4e0d\u5efa\u8bae\u5f53\u7a33\u80c6"
+      }
+    }
+  },
+  {
+    key: "espn-760494",
+    matchId: "espn-760494",
+    date: "2026-07-02",
+    home: "\u7f8e\u56fd",
+    away: "Bosnia-Herzegovina",
+    summary: {
+      winner: "\u7f8e\u56fd\u80dc",
+      winner_confidence: 63,
+      confidence: 62,
+      confidence_score: 62,
+      total_goals: "2-3\u7403",
+      total_goals_confidence: 57,
+      score: "2-1",
+      score_confidence: 35,
+      half_full: "\u5e73/\u80dc",
+      half_full_confidence: 50,
+      first_half:
+        "\u7f8e\u56fd\u4e3b\u573a\u6c14\u52bf\u4f1a\u5f88\u8db3\uff0c\u4f46\u9003\u6b7b\u4e0d\u4f1a\u4e00\u5f00\u59cb\u5931\u63a7\u538b\u4e0a\u3002\u6ce2\u9ed1\u5931\u53bb\u4e1c\u9053\u4f1a\u5148\u7a33\u4f4e\u4f4d\uff0c\u4f9d\u9760\u652f\u70b9\u548c\u5b9a\u4f4d\u7403\u5236\u9020\u538b\u529b\u3002\u4e0a\u534a\u573a\u66f4\u50cf0-0\u6216\u7f8e\u56fd1-0\u3002",
+      full_time:
+        "\u7f8e\u56fd\u6574\u4f53\u8fd0\u52a8\u80fd\u529b\u3001\u4e3b\u573a\u73af\u5883\u548c\u8fb9\u8def\u63a8\u8fdb\u66f4\u5360\u4f18\uff0c\u666e\u5229\u897f\u5947\u6062\u590d\u5230\u53ef\u6253\u66f4\u957f\u65f6\u95f4\u540e\u4f1a\u63d0\u9ad8\u6700\u540e\u4e09\u5341\u7c7b\u8d28\u91cf\u3002\u6ce2\u9ed1\u662f\u4ecd\u5728\u8d5b\u4f1a\u4e2d\u7684\u4f4e\u6392\u540d\u6b27\u6d32\u961f\uff0c\u4f46\u7f8e\u56fd\u9762\u5bf9\u6b27\u6d32\u7403\u961f\u5386\u53f2\u538b\u529b\u662f\u4e3b\u8981\u5fc3\u7406\u98ce\u9669\u3002",
+      winner_reason:
+        "\u7f8e\u56fd\u4e3b\u573a\u548c\u9635\u5bb9\u6d3b\u529b\u5360\u4f18\uff0c\u516c\u5f00\u62a5\u9053\u663e\u793a\u666e\u5229\u897f\u5947\u5df2\u51c6\u5907\u6253\u66f4\u957f\u65f6\u95f4\uff1b\u6ce2\u9ed1\u51fa\u7ebf\u8def\u5f84\u504f\u96be\uff0c\u8fdb\u653b\u66f4\u591a\u4f9d\u8d56\u652f\u70b9\u3001\u5b9a\u4f4d\u7403\u548c\u9632\u5b88\u53cd\u51fb\u3002",
+      total_goals_reason:
+        "\u7f8e\u56fd\u4f1a\u521b\u9020\u66f4\u591a\u653b\u52bf\uff0c\u4f46\u9003\u6b7b\u4e3b\u9898\u548c\u6ce2\u9ed1\u4f4e\u4f4d\u4f1a\u538b\u4f4e\u5927\u6bd4\u5206\u6982\u7387\uff0c2-0\u30012-1\u30011-1 \u662f\u4e3b\u8981\u533a\u95f4\u3002",
+      tactical_profile:
+        "\u7f8e\u56fd\u9700\u8981\u63a7\u5236\u8f6c\u6362\u5931\u8bef\uff0c\u907f\u514d\u7ed9\u6ce2\u9ed1\u5b9a\u4f4d\u7403\u548c\u957f\u4f20\u652f\u70b9\u7a7a\u95f4\u3002\u6ce2\u9ed1\u4f1a\u5c3d\u91cf\u964d\u4f4e\u8282\u594f\uff0c\u628a\u6bd4\u8d5b\u62d6\u8fdb\u5355\u70b9\u673a\u4f1a\u3002",
+      player_functions:
+        "\u7f8e\u56fd\u5173\u952e\u662f\u666e\u5229\u897f\u5947\u8fb9\u8def\u548c\u8096\u57fa\u57df\u63a8\u8fdb\u3001\u9ea6\u57fa\u5c3c\u4e8c\u70b9\u7403\u3001\u96f7\u5185\u8fde\u63a5\u3002\u6ce2\u9ed1\u5173\u952e\u662f\u4e2d\u950b\u652f\u70b9\u3001\u5b9a\u4f4d\u7403\u843d\u70b9\u548c\u7981\u533a\u524d\u6cbf\u4fdd\u62a4\u3002",
+      entertainment_top3: [
+        { score: "2-1", half_full: "\u5e73/\u80dc", confidence: 35 },
+        { score: "2-0", half_full: "\u80dc/\u80dc", confidence: 29 },
+        { score: "1-1", half_full: "\u5e73/\u5e73", confidence: 20 }
+      ],
+      match_filter:
+        "\u4e09\u573a\u91cc\u76f8\u5bf9\u66f4\u9002\u5408\u5173\u6ce8\u7f8e\u56fd\u65b9\u5411\uff0c\u4f46\u4ecd\u8981\u9632\u9003\u6b7b\u4f4e\u8282\u594f\u548c\u5e73\u5c40\u62d6\u5ef6\u3002",
+      option_layers: {
+        main_pick: "\u7f8e\u56fd\u80dc",
+        secondary_pick: "\u7f8e\u56fd\u4e0d\u8d25 + 2-3\u7403",
+        small_hedge: "1-1\u5e73\u5c40",
+        avoid_pick: "\u7f8e\u56fd\u5927\u80dc\uff0c\u4e0d\u5efa\u8bae\u8fc7\u5ea6\u653e\u5927\u4e3b\u573a\u4f18\u52bf"
+      }
+    }
+  }
+];
+
+const db = new DatabaseSync(dbPath);
+const stmt = db.prepare(`
+  INSERT INTO predictions (prediction_key, match_id, match_date, home, away, model_name, summary_json, raw_json, generated_at)
+  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(prediction_key) DO UPDATE SET
+    match_id = excluded.match_id,
+    match_date = excluded.match_date,
+    home = excluded.home,
+    away = excluded.away,
+    model_name = excluded.model_name,
+    summary_json = excluded.summary_json,
+    raw_json = excluded.raw_json,
+    generated_at = excluded.generated_at
+`);
+
+let cache = {};
+if (fs.existsSync(cachePath)) cache = JSON.parse(fs.readFileSync(cachePath, "utf8"));
+
+for (const item of predictions) {
+  const raw = {
+    mode: "manual-codex",
+    result: item.summary,
+    generatedBy: "Codex manual football analysis",
+    generatedAt: now
+  };
+  for (const key of [item.key, `${item.date}|${item.home}|${item.away}`]) {
+    stmt.run(
+      key,
+      item.matchId,
+      item.date,
+      item.home,
+      item.away,
+      "codex-manual-no-llm",
+      JSON.stringify(item.summary),
+      JSON.stringify(raw),
+      now
+    );
+    cache[key] = {
+      matchId: item.matchId,
+      date: item.date,
+      home: item.home,
+      away: item.away,
+      modelName: "codex-manual-no-llm",
+      generatedAt: now,
+      result: raw,
+      summary: item.summary
+    };
+  }
+}
+
+db.close();
+fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2), "utf8");
+console.log(`repaired ${predictions.length} predictions`);
