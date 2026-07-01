@@ -1,0 +1,272 @@
+/*
+  Tabler-inspired UI adapter for the football analysis workspace.
+  This file does not vendor Tabler source; it maps the project's existing
+  components onto a Tabler-like admin visual system.
+*/
+
+:root {
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --panel-strong: #ffffff;
+  --surface: #ffffff;
+  --surface2: #f8fafc;
+  --ink: #1f2937;
+  --text: #1f2937;
+  --subtle: #667085;
+  --muted: #667085;
+  --line: #dce3ef;
+  --border: #dce3ef;
+  --green: #2fb344;
+  --grass: #2fb344;
+  --blue: #206bc4;
+  --accent: #206bc4;
+  --accent-dim: #1b5da8;
+  --accent-ring: rgba(32, 107, 196, 0.18);
+  --red: #d63939;
+  --gold: #f59f00;
+  --accent-soft: #eef6ff;
+  --radius: 10px;
+  --radius-sm: 6px;
+  --shadow: 0 10px 24px rgba(24, 36, 56, 0.06);
+  --shadow-sm: 0 4px 16px rgba(24, 36, 56, 0.05);
+  --shadow-md: 0 16px 36px rgba(24, 36, 56, 0.08);
+}
+
+body {
+  background:
+    linear-gradient(180deg, rgba(32, 107, 196, 0.035), transparent 260px),
+    var(--bg);
+}
+
+.sidebar,
+.config-nav {
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.brand-block {
+  border-bottom-color: #e7edf5;
+}
+
+.brand-mark {
+  border-radius: 8px;
+  background: #206bc4;
+  box-shadow: 0 8px 18px rgba(32, 107, 196, 0.18);
+}
+
+.sidebar h1,
+.config-nav h1 {
+  color: var(--ink);
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+}
+
+.sidebar .brand-block p,
+.config-nav .brand-block p {
+  color: #667085;
+}
+
+.side-nav {
+  gap: 4px;
+}
+
+.side-nav a {
+  min-height: 36px;
+  border-radius: 6px;
+  color: #526174;
+  font-weight: 650;
+}
+
+.side-nav a.active,
+.side-nav a:hover {
+  color: #206bc4;
+  border-color: transparent;
+  background: #edf4ff;
+  box-shadow: inset 3px 0 0 #206bc4;
+}
+
+.main-panel,
+.config-main {
+  background: transparent;
+}
+
+.analysis-toolbar,
+.compact-hero,
+.config-hero,
+.match-hero,
+.detail-hero,
+.list-home-card,
+.config-card,
+.detail-card,
+.primary-stack,
+.side-stack,
+.source-policy,
+.skill-doc,
+.team-match-picker {
+  border: 1px solid #dce3ef;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: var(--shadow-sm);
+}
+
+.analysis-toolbar,
+.compact-hero,
+.config-hero,
+.match-hero,
+.detail-hero {
+  background:
+    linear-gradient(180deg, #ffffff, #fbfdff);
+}
+
+.muted-label,
+.tag {
+  color: #667085;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.tag,
+.link-tag,
+.status-pill,
+.match-card .tag,
+.source-chip,
+.result-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  color: #206bc4;
+  background: #eef6ff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+button,
+.primary-action,
+.secondary-action,
+.config-actions button,
+.date-panel button,
+.filter-tabs button,
+.day-switcher button {
+  border-radius: 6px;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+button:hover,
+.primary-action:hover,
+.secondary-action:hover,
+.filter-tabs button:hover,
+.day-switcher button:hover {
+  box-shadow: 0 4px 14px rgba(32, 107, 196, 0.12);
+}
+
+.primary-action,
+#applyDate,
+#saveConfig,
+#saveProfile,
+.sync-panel button {
+  border-color: #206bc4;
+  color: #ffffff;
+  background: #206bc4;
+}
+
+.secondary-action,
+.back-link,
+.home-link {
+  border-color: #dce3ef;
+  color: #526174;
+  background: #ffffff;
+}
+
+input,
+select,
+textarea {
+  border-color: #dce3ef;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: #7ab2f4;
+  box-shadow: 0 0 0 3px rgba(32, 107, 196, 0.14);
+}
+
+.filter-tabs {
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid #dce3ef;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.filter-tabs button {
+  border-color: transparent;
+  background: transparent;
+}
+
+.filter-tabs button.active,
+.filter-tabs button:hover {
+  color: #206bc4;
+  background: #ffffff;
+  border-color: #dce3ef;
+}
+
+.match-card,
+.result-card,
+.prediction-result article,
+.source-grid article,
+.prematch-source-grid article,
+.tactical-card,
+.team-card,
+.player-row {
+  border: 1px solid #dce3ef;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.match-card:hover {
+  border-color: #8bbcf0;
+  box-shadow: 0 8px 22px rgba(32, 107, 196, 0.1);
+}
+
+.section-head h2,
+.config-card h2,
+.skill-doc h2 {
+  color: #1f2937;
+  font-weight: 750;
+}
+
+.empty-state {
+  border: 1px dashed #c8d4e4;
+  border-radius: 8px;
+  color: #667085;
+  background: #f8fafc;
+}
+
+.config-status.success,
+.feedback-success {
+  color: #18712b;
+  border-color: rgba(47, 179, 68, 0.24);
+  background: #effaf1;
+}
+
+.config-status.error,
+.feedback-error {
+  color: #a12626;
+  border-color: rgba(214, 57, 57, 0.24);
+  background: #fff1f1;
+}
+
+@media (max-width: 860px) {
+  .sidebar,
+  .config-nav {
+    border-bottom: 1px solid #dce3ef;
+  }
+}

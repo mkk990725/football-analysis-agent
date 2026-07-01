@@ -1280,4 +1280,110 @@ restoreActiveJob();
     grid-template-columns: 1fr;
   }
 }
+
+/* Tabler-inspired overrides. Kept local because this component uses scoped CSS. */
+.page-shell {
+  background:
+    linear-gradient(180deg, rgba(32, 107, 196, 0.035), transparent 260px),
+    #f5f7fb;
+}
+
+.navbar,
+.sidebar,
+.glass-card {
+  background: #ffffff;
+  border-color: #dce3ef;
+  box-shadow: 0 4px 16px rgba(24, 36, 56, 0.05);
+}
+
+.brand,
+.brand-block h1,
+:deep(.n-card),
+.situation-summary strong,
+.prediction-units strong,
+.layered-units strong,
+.visible-reasoning h3 {
+  color: #1f2937;
+}
+
+.brand-mark,
+.primary-run-button {
+  background: #206bc4;
+  box-shadow: 0 8px 18px rgba(32, 107, 196, 0.18);
+}
+
+.home-link,
+.codex-mini-button,
+.native-control,
+:deep(.n-button) {
+  border-radius: 6px;
+  border-color: #dce3ef;
+}
+
+.side-nav a {
+  min-height: 36px;
+  border-radius: 6px;
+  color: #526174;
+  font-weight: 650;
+}
+
+.side-nav a.active,
+.side-nav a:hover {
+  color: #206bc4;
+  border-color: transparent;
+  background: #edf4ff;
+  box-shadow: inset 3px 0 0 #206bc4;
+}
+
+.glass-card {
+  border-radius: 10px;
+}
+
+.glass-card:hover {
+  border-color: #8bbcf0;
+  box-shadow: 0 8px 22px rgba(32, 107, 196, 0.1);
+}
+
+.status-text {
+  color: #18712b;
+}
+
+.status-dot {
+  background: #2fb344;
+  box-shadow: 0 0 0 4px rgba(47, 179, 68, 0.14);
+}
+
+.step.completed,
+.prediction-units article:first-child {
+  border-color: #bfdbfe;
+  background: #eef6ff;
+}
+
+.step.completed {
+  color: #206bc4;
+}
+
+.log-area {
+  border-color: #dce3ef;
+  background: #111827;
+}
+
+.prediction-units article,
+.layered-units article,
+.prematch-summary,
+.prematch-focus,
+.prematch-source-grid article,
+.visible-reasoning,
+.package-details,
+.situation-summary {
+  border-color: #dce3ef;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.feedback-error {
+  color: #a12626;
+  border-color: rgba(214, 57, 57, 0.24);
+  background: #fff1f1;
+}
 </style>
